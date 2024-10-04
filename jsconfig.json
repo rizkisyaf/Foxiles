@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "jsx": "react",
+    "target": "ES6",
+    "module": "commonjs",
+    "checkJs": true
+  },
+  "include": [
+    "src/**/*.js",
+    "src/utils/types.js",
+    "src/utils/UploaderService.js",
+    "backend/drmservice.mjs"
+  ]
+}
