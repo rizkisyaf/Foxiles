@@ -101,7 +101,7 @@ function BuyerPage({ provider }) {
   useEffect(() => {
     if (showCryptoModal && selectedFile && uniqueMemo) {
       // Establish WebSocket connection
-      wsRef.current = new WebSocket("ws://54.179.240.6:8080");
+      wsRef.current = new WebSocket("wss://foxiles.xyz");
 
       wsRef.current.onopen = () => {
         console.log("WebSocket connection established");

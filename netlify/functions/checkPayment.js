@@ -2,7 +2,7 @@ import WebSocket from 'ws';
 
 export async function handler(event, context) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket('ws://54.179.240.6:8080');
+    const ws = new WebSocket('wss://foxiles.xyz');
 
     ws.on('open', () => {
       // Parsing incoming request data
