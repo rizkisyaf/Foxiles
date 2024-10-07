@@ -25,6 +25,8 @@ function BuyerPage({ provider }) {
   const [uniqueMemo, setUniqueMemo] = useState(null); // Unique memo for the buyer
   const wsRef = useRef(null); // Track WebSocket with useRef
 
+  console.log("Influencer ID:", influencerId);
+
   // Fetch uploader files metadata
   const fetchUploaderFilesMetadata = useCallback(async () => {
     setLoading(true);
