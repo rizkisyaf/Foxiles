@@ -1,17 +1,16 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { PublicKey, Connection, SystemProgram } from "@solana/web3.js";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useParams } from "react-router-dom";
+import { PublicKey } from "@solana/web3.js";
 import { Oval } from "react-loader-spinner";
 import { motion } from "framer-motion";
 import { fetchUploaderFiles } from "../utils/UploaderService";
-import { createTransferTransaction } from "../utils/transactionService";
 import { decryptFile, fetchEncryptedFileData } from "../utils/drmservice";
 import { QRCodeCanvas } from "qrcode.react";
 import logo from "../assets/2.png";
+import { v4 as uuidv4 } from "uuid"; // For generating unique memo
 import "./BuyerPage.css";
 
-const PAYMENT_TIMEOUT = 180; // 3 minutes
-const ITEMS_PER_PAGE = 6;
+const ITEMS_PER_PAGE = 10;
 
 function BuyerPage({ provider }) {
   const { influencerId } = useParams();
@@ -20,13 +19,13 @@ function BuyerPage({ provider }) {
   const [status, setStatus] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [showCryptoModal, setShowCryptoModal] = useState(false);
-  const [socket, setSocket] = useState(null);
-  const [timer, setTimer] = useState(PAYMENT_TIMEOUT);
-  const [timerInterval, setTimerInterval] = useState(null);
   const [overlayLoading, setOverlayLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [uniqueMemo, setUniqueMemo] = useState(null); // Unique memo for the buyer
+  const wsRef = useRef(null); // Track WebSocket with useRef
 
+  // Fetch uploader files metadata
   const fetchUploaderFilesMetadata = useCallback(async () => {
     setLoading(true);
     setStatus("Fetching uploader's files...");
@@ -56,6 +55,7 @@ function BuyerPage({ provider }) {
     fetchUploaderFilesMetadata();
   }, [fetchUploaderFilesMetadata]);
 
+  // Handle payment confirmation logic
   const handlePaymentConfirmed = useCallback(async () => {
     setStatus("Payment confirmed. Preparing your file for decryption...");
     setOverlayLoading(true);
@@ -91,75 +91,58 @@ function BuyerPage({ provider }) {
     } finally {
       setOverlayLoading(false);
       setShowCryptoModal(false);
+      setUniqueMemo(null); // Reset memo after transaction completes
     }
   }, [selectedFile]);
 
-  const clearTimer = useCallback(() => {
-    if (timerInterval) {
-      clearInterval(timerInterval);
-      setTimerInterval(null);
-    }
-  }, [timerInterval]);
+  // WebSocket setup and handle payment confirmation
+  useEffect(() => {
+    if (showCryptoModal && selectedFile && uniqueMemo) {
+      // Establish WebSocket connection
+      wsRef.current = new WebSocket("ws://localhost:8080"); // Update with your WebSocket server URL
 
-  // Polling mechanism to check payment status
-  const startPollingPaymentStatus = useCallback(() => {
-    setTimer(PAYMENT_TIMEOUT);
-    const interval = setInterval(async () => {
-      setTimer((prev) => {
-        if (prev <= 1) {
-          clearTimer();
-          setStatus("Payment timeout. Please try again.");
-          setShowCryptoModal(false);
-          return 0;
-        }
-        return prev - 1;
-      });
+      wsRef.current.onopen = () => {
+        console.log("WebSocket connection established");
+        setStatus("Waiting for payment confirmation...");
 
-      try {
-        const response = await fetch("/check-payment", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
+        // Send payment details to WebSocket server
+        wsRef.current.send(
+          JSON.stringify({
             receiver: influencerId,
             amount: selectedFile.price,
-          }),
-        });
+            memo: uniqueMemo,
+          })
+        );
+      };
 
-        const data = await response.json();
-        if (data.status === "confirmed") {
-          clearTimer();
-          handlePaymentConfirmed();
+      wsRef.current.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.status === "success") {
+          handlePaymentConfirmed(); // Call payment confirmation handler
+        } else if (data.status === "not_found") {
+          console.log("Payment not found, waiting...");
+        } else {
+          console.error("WebSocket Error:", data.message);
+          setStatus("Error processing payment. Please try again.");
+          setShowCryptoModal(false);
         }
-      } catch (error) {
-        console.error("Error checking payment:", error);
-        setStatus("Error checking payment status. Please try again.");
-      }
-    }, 3000); // Poll every 3 seconds
+      };
 
-    setTimerInterval(interval);
-  }, [influencerId, selectedFile, clearTimer, handlePaymentConfirmed]);
+      wsRef.current.onerror = (error) => {
+        console.error("WebSocket Error:", error);
+        setStatus("Error connecting to payment server.");
+        setShowCryptoModal(false);
+      };
 
-  // Refactor: Replace WebSocket code with polling mechanism
-  useEffect(() => {
-    if (selectedFile && showCryptoModal) {
-      setStatus("Waiting for payment confirmation...");
-      startPollingPaymentStatus();
-      clearTimer();
+      return () => {
+        if (wsRef.current) {
+          wsRef.current.close(); // Close WebSocket connection on cleanup
+        }
+      };
     }
+  }, [showCryptoModal, selectedFile, uniqueMemo, influencerId, handlePaymentConfirmed]);
 
-    return () => {
-      clearTimer();
-    };
-  }, [
-    clearTimer,
-    startPollingPaymentStatus,
-    selectedFile,
-    influencerId,
-    showCryptoModal,
-  ]);
-
+  // Pagination and file display logic
   const paginatedFiles = files.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
@@ -178,6 +161,12 @@ function BuyerPage({ provider }) {
   };
 
   const handleBuyFileWithCrypto = (file) => {
+    // Generate a unique memo only when a file is selected for purchase
+    if (!uniqueMemo || selectedFile !== file) {
+      const newMemo = uuidv4(); // Use UUID for uniqueness
+      setUniqueMemo(newMemo);
+    }
+
     setSelectedFile(file);
     setShowCryptoModal(true);
     setStatus("Please complete the payment to receive the file.");
@@ -210,8 +199,7 @@ function BuyerPage({ provider }) {
               Copy Profile Link
             </button>
           </div>
-          <h2 className="files-header">Files Uploaded by {influencerId}</h2>{" "}
-          {/* Added this header */}
+          <h2 className="files-header">Files Uploaded by {influencerId}</h2>
           <div className="files-section">
             {paginatedFiles.length === 0 ? (
               <p>No files found for this uploader.</p>
@@ -253,17 +241,16 @@ function BuyerPage({ provider }) {
               Next
             </button>
           </div>
-          {showCryptoModal && selectedFile && (
+          {showCryptoModal && selectedFile && uniqueMemo && (
             <div className="crypto-modal">
               <div className="buyer-modal-content">
                 <h4>Payment Instructions</h4>
                 <p>Scan the QR code or copy the wallet address below to pay:</p>
                 <QRCodeCanvas
-                  value={`solana:${influencerId}?amount=${selectedFile.price}`}
+                  value={`solana:${influencerId}?amount=${selectedFile.price}&memo=${uniqueMemo}`} // Include the memo in the QR code
                   size={200}
                 />
                 <p className="wallet-address-full">{influencerId}</p>
-                <p>Time left to pay: {timer} seconds</p> {/* Countdown timer */}
                 <button
                   onClick={() => setShowCryptoModal(false)}
                   className="close-modal-button"

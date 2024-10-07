@@ -29,7 +29,7 @@ import {
   FaFacebook,
   FaInstagram,
   FaLinkedin,
-  FaFileAlt
+  FaFileAlt,
 } from "react-icons/fa";
 import { BsTwitterX } from "react-icons/bs";
 
@@ -170,21 +170,18 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
       const fileType = file.type;
 
       // Step 2: Process the file by sending it to the backend
-      const processResponse = await fetch(
-        "/.netlify/functions/processFile",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            fileBuffer: fileBuffer.toString("base64"),
-            uploaderPublicKey: walletPublicKey,
-            fileType,
-            fileSizeMB,
-          }),
-        }
-      );
+      const processResponse = await fetch("/.netlify/functions/processFile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fileBuffer: fileBuffer.toString("base64"),
+          uploaderPublicKey: walletPublicKey,
+          fileType,
+          fileSizeMB,
+        }),
+      });
 
       if (!processResponse.ok) {
         throw new Error(`Server error: ${processResponse.status}`);
@@ -196,7 +193,7 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
 
       // Step 3: Upload processed file to Pinata
       const uploadResponse = await fetch(
-        "http://localhost:5000/upload-to-pinata",
+        "/.netlify/functions/uploadToPinata",
         {
           method: "POST",
           headers: {

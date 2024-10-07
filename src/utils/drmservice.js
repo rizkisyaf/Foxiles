@@ -32,7 +32,7 @@ const extractMetadata = (fileBuffer) => {
 export const fetchEncryptedFileData = async (fileCid) => {
   try {
     const response = await fetch(
-      `http://localhost:5000/fetch-encrypted-file/${fileCid}`
+      `/.netlify/functions/fetch-encrypted-file/:fileCid`
     );
 
     if (!response.ok) {
