@@ -9,6 +9,6 @@
     "src/**/*.js",
     "src/utils/types.js",
     "src/utils/UploaderService.js",
-    "backend/drmservice.mjs"
+    "netlify/functions/drmservice.mjs"
   ]
 }

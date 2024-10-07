@@ -171,7 +171,7 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
 
       // Step 2: Process the file by sending it to the backend
       const processResponse = await fetch(
-        "http://localhost:5000/process-file",
+        "/.netlify/functions/processFile",
         {
           method: "POST",
           headers: {

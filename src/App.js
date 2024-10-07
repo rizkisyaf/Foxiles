@@ -41,7 +41,6 @@ const App = () => {
           element={
             <BuyerPage
               provider={provider} // Pass these props but they can be null until login
-              walletServicesPlugin={WalletServicesPlugin}
             />
           }
         />
