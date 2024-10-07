@@ -10,7 +10,7 @@ import logo from "../assets/2.png";
 import { v4 as uuidv4 } from "uuid"; // For generating unique memo
 import "./BuyerPage.css";
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 8;
 
 function BuyerPage({ provider }) {
   const { influencerId } = useParams();
