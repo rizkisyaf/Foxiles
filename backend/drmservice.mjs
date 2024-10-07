@@ -9,7 +9,6 @@ import {
   Connection,
   PublicKey,
   Transaction,
-  TransactionInstruction,
 } from "@solana/web3.js";
 import { fileTypeFromBuffer } from "file-type";
 
@@ -20,6 +19,10 @@ export const processFile = async (fileBuffer, uploaderPublicKey, fileType) => {
   try {
     // Generate a 32-byte encryption key for AES-256
     const encryptionKey = crypto.randomBytes(32);
+    console.log(
+      "Generated Encryption Key (before serialization):",
+      encryptionKey.toString("base64")
+    );
 
     // Encrypt the file
     const { encryptedData, iv } = encryptFile(fileBuffer, encryptionKey);
@@ -35,11 +38,13 @@ export const processFile = async (fileBuffer, uploaderPublicKey, fileType) => {
     const drmBuffer = await addDRM(
       encryptedData,
       iv,
+      encryptionKey,
       uploaderPublicKey,
       drmRules,
       fileType
     );
 
+    console.log("DRM Buffer Length:", drmBuffer.length);
     return { drmBuffer, encryptionKey }; // Return the DRM-protected file buffer
   } catch (error) {
     console.error("Error processing file:", error);
@@ -71,45 +76,65 @@ export const decryptFile = (encryptedData, encryptionKey, iv) => {
 export const addDRM = async (
   encryptedData,
   iv,
+  encryptionKey,
   uploaderPublicKey,
   drmRules,
-  fileType
+  fileType,
+  fileSizeMB
 ) => {
-  // Add watermark
-  const watermarkedBuffer = await addWatermark(
-    encryptedData,
-    uploaderPublicKey,
-    fileType
-  );
+  try {
+    // Add watermark
+    const watermarkedBuffer = await addWatermark(
+      encryptedData,
+      uploaderPublicKey,
+      fileType
+    );
 
-  // Generate unique tracking ID
-  const trackingId = uuidv4();
+    // Generate unique tracking ID
+    const trackingId = uuidv4();
 
-  // Get original device environment for self-destruct checks
-  const originalEnvironment = await getDeviceEnvironment();
+    // Get original device environment for self-destruct checks
+    const originalEnvironment = await getDeviceEnvironment();
 
-  // Prepare metadata
-  const metadata = {
-    uploaderPublicKey,
-    trackingId,
-    drmRules,
-    originalEnvironment: originalEnvironment,
-    iv: iv.toString("hex"), // Include IV for decryption
-  };
+    // Prepare metadata
+    const metadata = {
+      uploaderPublicKey,
+      trackingId,
+      drmRules,
+      fileType,
+      fileSizeMB,
+      originalEnvironment,
+      iv: iv.toString("base64"),
+      encryptionKey: encryptionKey.toString("base64"),
+    };
 
-  // Serialize metadata
-  const metadataBuffer = Buffer.from(JSON.stringify(metadata), "utf-8");
+    // Add detailed logging before serialization
+    console.log(
+      "Metadata before serialization:",
+      JSON.stringify(metadata, null, 2)
+    );
 
-  // Prepend the length of the metadata for extraction
-  const metadataLengthBuffer = Buffer.alloc(4);
-  metadataLengthBuffer.writeUInt32BE(metadataBuffer.length, 0);
+    // Serialize metadata
+    const metadataBuffer = Buffer.from(JSON.stringify(metadata), "utf-8");
+    console.log(
+      "Serialized Metadata Buffer:",
+      metadataBuffer.toString("utf-8")
+    );
 
-  // Combine metadata and encrypted data
-  return Buffer.concat([
-    metadataLengthBuffer,
-    metadataBuffer,
-    watermarkedBuffer,
-  ]);
+    // Prepend the length of the metadata for extraction
+    const metadataLengthBuffer = Buffer.alloc(4);
+    metadataLengthBuffer.writeUInt32BE(metadataBuffer.length, 0);
+
+    // Combine metadata and encrypted data
+    return Buffer.concat([
+      metadataLengthBuffer,
+      metadataBuffer,
+      watermarkedBuffer,
+    ]);
+  } catch (error) {
+    console.error("Error in addDRM function:", error.message || error);
+    throw error;
+  }
 };
 
 // Add watermark based on file type
@@ -325,9 +350,7 @@ const detectNetworkSharingAttempt = async () => {
 // Fetch encrypted file data from IPFS
 export const fetchEncryptedFileData = async (fileCid) => {
   try {
-    const response = await fetch(
-      `${process.env.REACT_APP_GATEWAY_URL}/${fileCid}`
-    );
+    const response = await fetch(`${process.env.GATEWAY_URL}/ipfs/${fileCid}`);
     if (!response.ok) {
       throw new Error("Failed to fetch encrypted file data from IPFS");
     }

@@ -16,6 +16,7 @@ import {
 import { sha256 } from "js-sha256";
 import { prepareUpdateMetadataInstructionData } from "../utils/registerService";
 import { SolanaWallet } from "@web3auth/solana-provider";
+import logo from '../assets/2.png';
 
 const programID = new PublicKey(`${process.env.REACT_APP_PROGRAM_ID}`);
 
@@ -43,8 +44,17 @@ const UploaderDashboard = ({ provider, web3auth }) => {
       setWalletPublicKey(accounts[0]);
 
       // Fetch files uploaded by the user
-      const uploadedFiles = await fetchUploaderFiles(uploaderPublicKey);
-      setFiles(uploadedFiles);
+      const uploadedFiles = await fetchUploaderFiles(uploaderPublicKey, {
+        limit: 100,
+      });
+
+      const filesWithMetadata = uploadedFiles.map((file) => ({
+        ...file,
+        fileType: file.fileType,
+        fileSizeMB: file.fileSizeMB,
+      }));
+
+      setFiles(filesWithMetadata);
       setStatus("");
     } catch (error) {
       console.error("Error fetching uploader files:", error);
@@ -55,7 +65,16 @@ const UploaderDashboard = ({ provider, web3auth }) => {
   }, [provider]);
 
   useEffect(() => {
-    if (provider && web3auth) loadUploaderFiles();
+    if (provider && web3auth) {
+      loadUploaderFiles();
+    }
+
+    // Check if the window history state indicates a need to reload the files
+    if (window.history.state && window.history.state.shouldReload) {
+      setTimeout(() => {
+        loadUploaderFiles();
+      }, 3000); // Wait for 3 seconds before loading files
+    }
   }, [provider, web3auth, loadUploaderFiles]);
 
   const navigateToHome = () => {
@@ -142,7 +161,12 @@ const UploaderDashboard = ({ provider, web3auth }) => {
       console.log("Update transaction signature:", signature);
 
       setStatus("File metadata updated successfully.");
-      loadUploaderFiles(); // Reload files after update
+
+      // Delay refresh to allow server data sync
+      setTimeout(() => {
+        loadUploaderFiles();
+      }, 3000);
+
       setSelectedFile(null);
     } catch (error) {
       console.error("Error updating file metadata:", error);
@@ -154,13 +178,29 @@ const UploaderDashboard = ({ provider, web3auth }) => {
 
   return (
     <div className="uploader-dashboard">
-      <h2>Your Uploaded Files</h2>
-
-      <button onClick={navigateToHome}>Go Back to Homepage</button>
-
-      {/* Copy Profile Link Button */}
-      <button onClick={handleCopyProfileLink}>Copy Profile Link</button>
-      <p>Share this link with your buyers so they can view all your files.</p>
+      <div className="header-container">
+        <div className="left-side">
+          <h2>Your Uploaded Files</h2>
+          <div>
+            <button onClick={navigateToHome} className="dashboard-button">
+              Go Back to Homepage
+            </button>
+            {/* Copy Profile Link Button */}
+            <button
+              onClick={handleCopyProfileLink}
+              className="dashboard-button"
+            >
+              Copy Profile Link
+            </button>
+          </div>
+          <p>
+            Share this link with your buyers so they can view all your files.
+          </p>
+        </div>
+        <div className="right-side">
+          <img src={logo} alt="Logo" className="logo" />
+        </div>
+      </div>
 
       {loading ? (
         <p>Loading your files...</p>
@@ -178,7 +218,7 @@ const UploaderDashboard = ({ provider, web3auth }) => {
               )}
 
               <Link to={`/file/${file.fileCid}`}>
-                <button>View Details</button>
+                <button className="ds-button">View Details</button>
               </Link>
 
               {/* Button to copy the link */}
@@ -188,11 +228,15 @@ const UploaderDashboard = ({ provider, web3auth }) => {
                   navigator.clipboard.writeText(shareLink);
                   alert("Shareable link copied to clipboard!");
                 }}
+                className="ds-button"
               >
                 Copy Share Link
               </button>
 
-              <button onClick={() => openEditFileModal(file)}>
+              <button
+                onClick={() => openEditFileModal(file)}
+                className="ds-button"
+              >
                 Edit Metadata
               </button>
             </div>

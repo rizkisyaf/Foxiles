@@ -3,7 +3,7 @@ import { connection, pinata } from "./config";
 import { FileRegistration } from "./types";
 
 // Fetch all files uploaded by the uploader from on-chain storage
-export const fetchUploaderFiles = async (uploaderPublicKey) => {
+export const fetchUploaderFiles = async (uploaderPublicKey, options = {}) => {
   try {
     const programId = new PublicKey(`${process.env.REACT_APP_PROGRAM_ID}`);
     const accounts = await connection.getProgramAccounts(programId, {
@@ -17,7 +17,12 @@ export const fetchUploaderFiles = async (uploaderPublicKey) => {
       ],
     });
 
-    return accounts.map((account) => {
+    // Apply the limit if it exists in options
+    const limitedAccounts = options.limit
+      ? accounts.slice(0, options.limit)
+      : accounts;
+
+    return limitedAccounts.map((account) => {
       const fileData = FileRegistration.deserialize(account.account.data);
       return {
         fileName: fileData.file_name,
@@ -25,6 +30,7 @@ export const fetchUploaderFiles = async (uploaderPublicKey) => {
         price: Number(fileData.price) / LAMPORTS_PER_SOL,
         fileCid: fileData.file_url,
         fileType: fileData.file_type,
+        fileSizeMB: fileData.file_size,
         // Include any other fields needed
       };
     });
@@ -33,6 +39,7 @@ export const fetchUploaderFiles = async (uploaderPublicKey) => {
     throw error;
   }
 };
+
 
 // Update file metadata and upload DRM-protected version through backend
 export const updateFileMetadata = async (

@@ -1,5 +1,6 @@
 //homepage.js
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { useDropzone } from "react-dropzone";
 import {
   PublicKey,
   LAMPORTS_PER_SOL,
@@ -20,6 +21,17 @@ import "./HomePage.css";
 import { SolanaWallet } from "@web3auth/solana-provider";
 import { FileRegistration } from "../utils/types";
 import { sha256 } from "js-sha256";
+import { QRCodeCanvas } from "qrcode.react";
+import logo from "../assets/2.png";
+import fox from "../assets/foxlogo.png";
+import {
+  FaClipboard,
+  FaFacebook,
+  FaInstagram,
+  FaLinkedin,
+  FaFileAlt
+} from "react-icons/fa";
+import { BsTwitterX } from "react-icons/bs";
 
 const programID = new PublicKey(`${process.env.REACT_APP_PROGRAM_ID}`);
 
@@ -30,14 +42,18 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
   const [fileName, setFileName] = useState("");
   const [fileUrl, setFileUrl] = useState("");
   const [fileType, setFileType] = useState("");
+  const [uploadedFiles, setUploadedFiles] = useState([]);
   const [price, setPrice] = useState("");
   const [description, setDescription] = useState("");
   const [walletPublicKey, setWalletPublicKey] = useState(null);
+  const [walletBalance, setWalletBalance] = useState(0);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [statusColor, setStatusColor] = useState("");
   const [platformStatePubKey, setPlatformStatePubKey] = useState(null);
   const [platformFee, setPlatformFee] = useState(0.01);
+  const [showTopUpModal, setShowTopUpModal] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -54,13 +70,12 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
       }
     };
 
-    const fetchWalletPublicKey = async () => {
+    const fetchWalletDetails = async () => {
       try {
         if (!web3auth || !web3auth.provider) {
           throw new Error("Web3Auth provider not initialized");
         }
 
-        // Change method from 'solana_requestAccounts' to 'requestAccounts'
         const accounts = await web3auth.provider.request({
           method: "requestAccounts",
         });
@@ -68,17 +83,29 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
         if (accounts && accounts[0]) {
           setWalletPublicKey(accounts[0]);
           console.log("Fetched wallet public key:", accounts[0]);
+
+          // Fetch wallet balance
+          const connection = new Connection("https://api.devnet.solana.com");
+          const balance = await connection.getBalance(
+            new PublicKey(accounts[0])
+          );
+          setWalletBalance(balance / LAMPORTS_PER_SOL);
+
+          // Show top-up modal if balance is zero
+          if (balance === 0) {
+            setShowTopUpModal(true);
+          }
         } else {
           console.error("No accounts found.");
         }
       } catch (error) {
-        console.error("Error fetching wallet public key:", error);
+        console.error("Error fetching wallet details:", error);
       }
     };
 
     if (provider && web3auth) {
       fetchPlatformState();
-      fetchWalletPublicKey();
+      fetchWalletDetails();
     }
   }, [provider, web3auth]);
 
@@ -86,32 +113,36 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
     navigate("/uploaderdashboard");
   };
 
-  const handleFileUpload = (event) => {
-    if (event.target.files) {
-      const selectedFile = event.target.files[0];
+  const onDrop = useCallback((acceptedFiles) => {
+    const selectedFile = acceptedFiles[0];
+    const fileSizeMB = parseFloat(
+      (selectedFile.size / (1024 * 1024)).toFixed(2)
+    );
+    const maxSizeMB = 500;
 
-      const fileSizeMB = parseFloat(
-        (selectedFile.size / (1024 * 1024)).toFixed(2)
+    if (fileSizeMB > maxSizeMB) {
+      alert(
+        `The selected file is too large. Maximum allowed size is ${maxSizeMB} MB.`
       );
-      const maxSizeMB = 500;
-
-      if (fileSizeMB > maxSizeMB) {
-        alert(
-          `The selected file is too large. Maximum allowed size is ${maxSizeMB} MB.`
-        );
-        setFile(null);
-        setFileSizeMB(0); // Reset file size if file is too large
-      } else {
-        setFile(selectedFile);
-        setFileSizeMB(fileSizeMB); // Set the file size as a number
-
-        // Extract file type (e.g., image/png, video/mp4)
-        const fileType = selectedFile.type;
-        setFileType(fileType); // Set the file type in the state for later use
-        console.log("File type: ", fileType); // Log the file type for debugging
-      }
+      setFile(null);
+      setFileSizeMB(0);
+    } else {
+      setFile(selectedFile);
+      setFileSizeMB(fileSizeMB);
+      setFileName(selectedFile.name);
+      setFileType(selectedFile.type);
+      console.log("File uploaded:", selectedFile);
     }
-  };
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: {
+      "image/*": [],
+      "application/pdf": [],
+    },
+    maxFiles: 1,
+  });
 
   const uploadToPinata = async () => {
     if (!file || !fileName || !price || !description || !platformStatePubKey) {
@@ -136,7 +167,6 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
       console.log("File type: ", file.type); // Debug log
       console.log("File size (bytes): ", file.size); // Debug log
 
-      // Use 'image' as file type for image files
       const fileType = file.type;
 
       // Step 2: Process the file by sending it to the backend
@@ -151,6 +181,7 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
             fileBuffer: fileBuffer.toString("base64"),
             uploaderPublicKey: walletPublicKey,
             fileType,
+            fileSizeMB,
           }),
         }
       );
@@ -186,8 +217,20 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
 
       setFileCid(cid);
       setFileUrl(`https://ipfs.io/ipfs/${cid}`);
-      setStatus("File uploaded. Registering file on-chain...");
 
+      // Store uploaded file's metadata in state
+      const newFileMetadata = {
+        fileName,
+        fileCid: cid,
+        description,
+        price,
+        encryptionKey,
+        fileType,
+        fileSizeMB,
+      };
+      setUploadedFiles((prevFiles) => [...prevFiles, newFileMetadata]);
+
+      setStatus("File uploaded. Registering file on-chain...");
       // Register file on-chain and pass the encryption key
       await registerFileOnChain(
         cid,
@@ -219,6 +262,8 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
     fileType
   ) => {
     try {
+      console.log("Registering file with size (MB):", fileSizeMB);
+
       // Validate user input
       validateInput(cid, fileName, description, price, fileType);
 
@@ -249,6 +294,10 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
         fileSizeMB,
         fileType,
         encryptionKeyBuffer
+      );
+      console.log(
+        "Instruction data prepared for transaction:",
+        instructionData
       );
 
       const platformFeeAccount = new PublicKey(
@@ -312,7 +361,7 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
         // Update UI status
         setStatusColor("green");
         setStatus("File successfully registered.");
-        navigate("/uploaderdashboard");
+        navigate("/uploaderdashboard", { state: { shouldReload: true } });
       } else {
         console.log("File info account already exists, skipping creation.");
         // Proceed with updating or using the file account logic here...
@@ -340,6 +389,10 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
     }
   };
 
+  const handleTopUp = () => {
+    setShowTopUpModal(true);
+  };
+
   const handleFiatPayment = async () => {
     try {
       if (!walletServicesPlugin) {
@@ -360,27 +413,128 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
     }
   };
 
+  const copyToClipboard = () => {
+    navigator.clipboard
+      .writeText(walletPublicKey)
+      .then(() => {
+        alert("Wallet address copied to clipboard!");
+      })
+      .catch((err) => {
+        console.error("Could not copy text: ", err);
+      });
+  };
+
   return (
     <div className="homepage-container">
       {/* Navbar */}
       <nav className="navbar">
         <div className="navbar-logo" onClick={() => navigate("/")}>
-          <img src="/path/to/logo.svg" alt="Logo" className="logo" />
-          <h2>Foxiles</h2>
+          <img src={logo} alt="Logo" className="logo" />
         </div>
-        <div className="wallet-info">
+        <div className="wallet-info" onClick={handleTopUp}>
           {walletPublicKey ? (
-            <p className="wallet-display">{`${walletPublicKey.slice(0, 4)}...${walletPublicKey.slice(-4)}`}</p>
+            <div className="wallet-container">
+              <div className="wallet-address">
+                <span className="wallet-icon">🔑</span>
+                <div className="wallet-display">
+                  <p>{`${walletPublicKey.slice(0, 4)}...${walletPublicKey.slice(-4)}`}</p>
+                </div>
+              </div>
+              <div className="wallet-balance">
+                <span className="balance-icon">💰</span>
+                <div>
+                  <p>{walletBalance.toFixed(2)} SOL</p>
+                </div>
+              </div>
+            </div>
           ) : (
             <p>Loading wallet...</p>
           )}
+          <p className="wallet-extra-info">Click Here to Fund Your Wallet</p>
         </div>
         <div>
-        <button onClick={navigateToDashboard}>
-          Dashboard
-        </button>
+          <button onClick={navigateToDashboard} className="dashboard-button">
+            Dashboard
+          </button>
         </div>
       </nav>
+
+      {/* Top-Up Modal */}
+      {showTopUpModal && (
+        <div className="topup-modal">
+          <div className="modal-content">
+            <h3>Fund Your Wallet</h3>
+            <p>
+              To proceed with uploading, please fund your wallet. You can use
+              the QR code or wallet address below to deposit SOL.
+            </p>
+            <QRCodeCanvas
+              value={`solana:${walletPublicKey}?amount=1`}
+              size={200}
+            />
+            <p className="wallet-address-full">
+              {walletPublicKey}{" "}
+              <FaClipboard
+                onClick={copyToClipboard}
+                style={{ cursor: "pointer", marginLeft: "10px" }}
+              />
+            </p>
+            <button
+              onClick={() => setShowTopUpModal(false)}
+              className="dashboard-button"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Drag-and-Drop Section */}
+      <section className="hero-container">
+        <div className="drag-drop-section" {...getRootProps()}>
+          <input {...getInputProps()} />
+          {!file && !isUploading ? (
+            <>
+              {isDragActive ? (
+                <div className="drag-active">
+                  <p>Drop your files here...</p>
+                </div>
+              ) : (
+                <div className="drag-inactive">
+                  <img src={fox} alt="Logo" className="drag-image" />
+                  <p>Drag and drop files here, or click to upload</p>
+                  <p className="drop-instructions">Accepted: Images, PDFs</p>
+                </div>
+              )}
+            </>
+          ) : file && !isUploading ? (
+            <motion.div
+              className="file-info"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+            >
+              <FaFileAlt size={50} />
+              <p>File uploaded: {fileName}</p>
+              <p>File size: {fileSizeMB} MB</p>
+            </motion.div>
+          ) : (
+            <motion.div
+              className="uploading-status"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{
+                duration: 0.5,
+                repeat: Infinity,
+                repeatType: "reverse",
+              }}
+            >
+              <Oval color="#007bff" height={50} width={50} />
+              <p>{status}</p>
+            </motion.div>
+          )}
+        </div>
+      </section>
 
       {/* File Upload Section */}
       <div className="file-upload-section">
@@ -388,15 +542,8 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
           Upload Your Digital Asset
         </motion.h2>
 
-        {/* File Upload Inputs */}
+        {/* File Upload Inputs (only file name and price inputs remain) */}
         <motion.div className="file-upload-input">
-          <input
-            type="file"
-            onChange={handleFileUpload}
-            className="file-input"
-          />
-          <p>{fileSizeMB ? `File size: ${fileSizeMB} MB` : null}</p>{" "}
-          {/* Display file size */}
           <input
             type="text"
             placeholder="File Name"
@@ -452,11 +599,54 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
       {/* Status Message */}
       {!loading && status && (
         <div
-          className={`status-message ${statusColor === "red" ? "error" : "success"}`}
+          className={`status-message ${
+            statusColor === "red" ? "error" : "success"
+          }`}
         >
           {status}
         </div>
       )}
+
+      {/* Footer */}
+      <footer className="footer-container">
+        <div className="footer-mid">
+          <img src={logo} alt="Website Logo" className="footer-logo" />
+        </div>
+        <div className="footer-right">
+          <a
+            href="https://facebook.com"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Facebook"
+          >
+            <FaFacebook className="social-icon" />
+          </a>
+          <a
+            href="https://twitter.com"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Twitter"
+          >
+            <BsTwitterX className="social-icon" />
+          </a>
+          <a
+            href="https://instagram.com"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Instagram"
+          >
+            <FaInstagram className="social-icon" />
+          </a>
+          <a
+            href="https://linkedin.com"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="LinkedIn"
+          >
+            <FaLinkedin className="social-icon" />
+          </a>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -1,9 +1,61 @@
 .uploader-dashboard {
-  max-width: 1200px;
   margin: 0 auto;
-  padding: 20px;
-  background-color: #f9f9f9;
+  padding: 40px;
+  background-color: #3f3f46;
+}
+
+.header-container {
+  display: flex;
+  height: auto;
+  color: #fafafa;
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.right-side {
+  flex: 1;
+  display: flex; 
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.left-side {
+  flex: 1; 
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.left-side p {
+  opacity: 0.5;
+}
+
+.left-side span {
+  opacity: 0.5;
+  font-size: 17px;
+}
+
+.ds-button {
+  padding: 7px 10px;
+  margin-right: 5px;
+  margin-bottom: 5px;
+  background: linear-gradient(45deg, #fafafa, #c9c9c9);
+  color: #4fae8b;
+  font-size: 0.7rem;
+  font-weight: bold;
+  border: 0.3px solid #fafafa;
   border-radius: 10px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(63, 63, 70, 0.3);
+  position: relative;
+  z-index: 100;
+}
+
+.ds-button:hover {
+  background: linear-gradient(45deg, #c9c9c9, #fafafa);
+  box-shadow: 0 5px 17px rgba(63, 63, 70, 7);
 }
 
 .file-list {
@@ -13,15 +65,22 @@
 }
 
 .file-item {
-  background-color: #fff;
-  border: 1px solid #ddd;
+  background: linear-gradient(45deg, rgba(56, 87, 76, 0.6), rgba(79, 174, 139, 0.6), rgba(56, 87, 76, 0.6));
   border-radius: 8px;
   padding: 16px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+
 .file-item h3 {
   margin-top: 0;
+  color: #ffffff;
+}
+
+.file-item p {
+  margin-top: 0;
+  color: #ffffff;
+  opacity: 0.9;
 }
 
 .edit-modal {

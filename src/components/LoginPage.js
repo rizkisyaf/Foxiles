@@ -3,9 +3,18 @@ import { Web3Auth } from "@web3auth/modal";
 import { CHAIN_NAMESPACES, WEB3AUTH_NETWORK } from "@web3auth/base";
 import { SolanaPrivateKeyProvider } from "@web3auth/solana-provider";
 import { initializeApp } from "firebase/app";
-import { GoogleAuthProvider, getAuth, signInWithPopup, signInWithRedirect, getRedirectResult } from "firebase/auth";
+import {
+  GoogleAuthProvider,
+  getAuth,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+} from "firebase/auth";
 import "./LoginPage.css";
 import { useNavigate } from "react-router-dom";
+import { motion } from 'framer-motion';
+import logo from '../assets/2.png';
+import hero from '../assets/hero.png';
 
 // Web3Auth configuration for Solana
 const clientId = process.env.REACT_APP_WEB3AUTH_CLIENT_ID;
@@ -39,7 +48,9 @@ const LoginPage = ({ onLogin }) => {
   useEffect(() => {
     const initWeb3Auth = async () => {
       try {
-        const privateKeyProvider = new SolanaPrivateKeyProvider({ config: { chainConfig } });
+        const privateKeyProvider = new SolanaPrivateKeyProvider({
+          config: { chainConfig },
+        });
         const web3authInstance = new Web3Auth({
           clientId,
           chainConfig,
@@ -54,7 +65,7 @@ const LoginPage = ({ onLogin }) => {
         const result = await getRedirectResult(auth);
         if (result) {
           const web3authProvider = await web3authInstance.connect();
-          onLogin(web3authInstance, web3authProvider); 
+          onLogin(web3authInstance, web3authProvider);
           navigate("/dashboard");
         }
       } catch (error) {
@@ -94,7 +105,7 @@ const LoginPage = ({ onLogin }) => {
       setLoading(true);
       const web3authProvider = await web3auth.connect();
       await signInWithGoogle();
-      onLogin(web3auth, web3authProvider);  // Pass both web3auth and the provider
+      onLogin(web3auth, web3authProvider); // Pass both web3auth and the provider
       navigate("/dashboard");
       setLoading(false);
     } catch (error) {
@@ -106,20 +117,47 @@ const LoginPage = ({ onLogin }) => {
   return (
     <div className="login-container">
       <div className="login-left">
-        <div className="logo">
-          <img src="/path/to/your/logo.png" alt="Logo" />
-        </div>
+        <button
+          onClick={() => navigate("/")}
+          style={{ background: "none", border: "none", cursor: "pointer" }}
+        >
+          <img src={logo} alt="logo" className="logo-login" />
+        </button>
         <div className="login-form">
           <h1>Login</h1>
-          <p>Sign in with your Google account to get started.</p>
+          <p style={{ color: "#fafafa" }}>
+            Sign in with your Google account to get started.
+          </p>
           {loading ? (
-            <p>Loading...</p>
+            <p style={{ color: "#fafafa" }}>Loading...</p>
           ) : (
             <button className="btn login" onClick={login}>
               Login with Google
             </button>
           )}
         </div>
+      </div>
+      <div className="login-right">
+        <h2>Secure, Seamless, and Anonymous Access</h2>
+        <p>
+          No wallet? No problem. Start using the platform with just your email.
+        </p>
+        <p>
+          Get paid instantly, upload content securely, and enjoy full privacy
+          through decentralized identity (DID).
+        </p>
+        <p>
+          Content protection via DRM ensures your files are safe, and invisible
+          tracking prevents unauthorized actions.
+        </p>
+        <motion.img
+          src={hero}
+          alt="background image"
+          className="image-right"
+          initial={{ y: -50 }}
+          animate={{ y: 0 }}
+          transition={{ duration: 0.8 }}
+        />
       </div>
     </div>
   );
