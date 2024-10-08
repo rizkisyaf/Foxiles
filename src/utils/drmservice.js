@@ -31,8 +31,10 @@ const extractMetadata = (fileBuffer) => {
 // Fetch encrypted file data from IPFS
 export const fetchEncryptedFileData = async (fileCid) => {
   try {
+    console.log(`Fetching file data for CID: ${fileCid}`); // Debugging log
+
     const response = await fetch(
-      `/.netlify/functions/fetch-encrypted-file/:fileCid`
+      `/.netlify/functions/fetch-encrypted-file/${fileCid}`
     );
 
     if (!response.ok) {
@@ -84,21 +86,24 @@ export const decryptFile = (encryptedData, encryptionKey, iv) => {
   });
 
   // Decrypt using AES with CBC mode and PKCS7 padding
-  const decrypted = CryptoJS.AES.decrypt(
-    cipherParams,
-    key,
-    {
-      iv: ivWordArray,
-      mode: CryptoJS.mode.CBC,
-      padding: CryptoJS.pad.Pkcs7,
-    }
-  );
+  const decrypted = CryptoJS.AES.decrypt(cipherParams, key, {
+    iv: ivWordArray,
+    mode: CryptoJS.mode.CBC,
+    padding: CryptoJS.pad.Pkcs7,
+  });
 
   // Convert the decrypted word array back to a Uint8Array
-  const decryptedBytes = CryptoJS.enc.Base64.parse(decrypted.toString(CryptoJS.enc.Base64));
-  const decodedBuffer = new Uint8Array(decryptedBytes.words.flatMap(word =>
-    [(word >>> 24) & 0xff, (word >>> 16) & 0xff, (word >>> 8) & 0xff, word & 0xff]
-  ));
+  const decryptedBytes = CryptoJS.enc.Base64.parse(
+    decrypted.toString(CryptoJS.enc.Base64)
+  );
+  const decodedBuffer = new Uint8Array(
+    decryptedBytes.words.flatMap((word) => [
+      (word >>> 24) & 0xff,
+      (word >>> 16) & 0xff,
+      (word >>> 8) & 0xff,
+      word & 0xff,
+    ])
+  );
 
   return decodedBuffer;
 };

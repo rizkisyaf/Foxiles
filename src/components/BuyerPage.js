@@ -27,9 +27,9 @@ function BuyerPage({ provider }) {
   const [paymentTimeout, setPaymentTimeout] = useState(null);
   const [paymentInterval, setPaymentInterval] = useState(null);
   const [countdown, setCountdown] = useState(PAYMENT_TIMEOUT / 1000);
-  const [qrRendered, setQrRendered] = useState(false); // Track if QR has been rendered
+  const [qrRendered, setQrRendered] = useState(false);
 
-  const connection = new Connection("https://api.devnet.solana.com");
+  const connection = new Connection("https://solana-devnet.g.alchemy.com/v2/C191ERIvh8Hz0SAcEpq2_F3jr4wbMbHR");
 
   // Fetch the uploader's files metadata
   const fetchUploaderFilesMetadata = useCallback(async () => {
