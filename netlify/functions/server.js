@@ -71,34 +71,30 @@ app.post("/.netlify/functions/uploadToPinata", async (req, res) => {
   }
 });
 
-// Fetch encrypted file from IPFS via Netlify Function
-app.get("/.netlify/functions/fetch-encrypted-file/:fileCid", async (req, res) => {
-  const { fileCid } = req.params;
-  console.log(`Fetching file for CID: ${fileCid}`);
+// Netlify function to fetch encrypted file
+app.get(
+  "/.netlify/functions/fetch-encrypted-file/:fileCid",
+  async (req, res) => {
+    const { fileCid } = req.params;
 
-  try {
-    console.log(`Fetching encrypted file with CID: ${fileCid}`); // Debugging log
+    try {
+      console.log(`Fetching encrypted file with CID: ${fileCid}`);
+      const fileBuffer = await fetchEncryptedFile(fileCid);
+      console.log(`File buffer received, size: ${fileBuffer.length} bytes`);
+      console.log("File Buffer Received:", fileBuffer);
 
-    const fileBuffer = await fetchEncryptedFile(fileCid); // Fetch the file
-    if (!fileBuffer || fileBuffer.length === 0) {
-      console.error("File buffer is empty or not found.");
-      return res.status(404).send("File not found.");
+      if (!fileBuffer) {
+        return res.status(404).send("File not found.");
+      }
+
+      // Send the raw file as binary data
+      res.set("Content-Type", "application/octet-stream");
+      res.send(fileBuffer);
+    } catch (error) {
+      console.error("Error fetching encrypted file data:", error.message);
+      res.status(500).json({ error: "Failed to fetch encrypted file data" });
     }
-
-    // Log the file size for debugging
-    console.log(`File buffer received, size: ${fileBuffer.length} bytes`);
-
-    // Set the correct Content-Type for binary files
-    res.set("Content-Type", "application/octet-stream");
-
-    // Send the file buffer as the response
-    res.send(fileBuffer);
-  } catch (error) {
-    // Catch any errors and return a 500 status
-    console.error("Error fetching encrypted file data:", error.message);
-    return res.status(500).json({ error: "Failed to fetch encrypted file data" });
   }
-});
-
+);
 
 module.exports.handler = serverless(app);

@@ -12,11 +12,15 @@ const extractMetadata = (fileBuffer) => {
     const metadata = JSON.parse(metadataBuffer.toString("utf-8"));
     console.log("Extracted Metadata:", metadata);
 
-    if (!metadata.encryptionKey || !metadata.iv) {
-      console.error(
-        "Missing encryption key or IV in metadata after extraction"
+    if (
+      !metadata.encryptionKey ||
+      !metadata.iv ||
+      !metadata.fileType ||
+      !metadata.fileExtension
+    ) {
+      throw new Error(
+        "Missing encryption key, IV, fileType, or fileExtension in metadata"
       );
-      throw new Error("Missing encryption key or IV in metadata");
     }
 
     return { metadata, dataBuffer };
@@ -34,7 +38,7 @@ export const fetchEncryptedFileData = async (fileCid) => {
     console.log(`Fetching file data for CID: ${fileCid}`); // Debugging log
 
     const response = await fetch(
-      `https://foxiles.xyz/.netlify/functions/fetch-encrypted-file/${fileCid}`
+      `.netlify/functions/fetch-encrypted-file/${fileCid}`
     );
 
     if (!response.ok) {
