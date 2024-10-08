@@ -136,6 +136,7 @@ function BuyerPage({ provider, walletServicesPlugin }) {
   const attemptAutoRetrieveSignature = async () => {
     if (walletServicesPlugin && provider) {
       try {
+        console.log("Attempting to retrieve transaction signature...");
         setStatus(
           "Attempting to retrieve transaction signature automatically..."
         );
@@ -188,17 +189,25 @@ function BuyerPage({ provider, walletServicesPlugin }) {
         handlePaymentConfirmed(); // Call payment confirmation handler
       } else {
         setStatus("Verification failed: " + data.message);
+
         if (retryCount < 3) {
+          console.log(`Retrying verification... attempt ${retryCount + 1}`);
           setRetryCount((prev) => prev + 1);
-          verifyPayment(); // Retry verification if needed
+          verifyPayment();
+        } else {
+          console.log("Maximum retry attempts reached. Verification failed.");
         }
       }
     } catch (error) {
       console.error("Error during payment verification:", error);
       setStatus("Error during verification. Please try again.");
+      
       if (retryCount < 3) {
+        console.log(`Retrying verification... attempt ${retryCount + 1}`);
         setRetryCount((prev) => prev + 1);
         verifyPayment();
+      } else {
+        console.log("Maximum retry attempts reached. Verification failed.");
       }
     }
   };
