@@ -113,24 +113,13 @@ function BuyerPage({ provider, walletServicesPlugin }) {
         setStatus("Invalid price for the selected file. Please try again.");
         return;
       }
-
-      // Calculate the amount in lamports using BigNumber to avoid any precision issues
-      const amount = new BigNumber(priceInSOL).multipliedBy(LAMPORTS_PER_SOL);
-
-      if (amount.isNaN() || amount.isLessThanOrEqualTo(0)) {
-        console.error("Invalid amount calculated for payment:", amount);
-        setStatus("Error calculating payment amount. Please try again.");
-        return;
-      }
-
-      console.log("Selected file price:", selectedFile.price);
-      console.log("Parsed price in SOL:", priceInSOL);
-      console.log("Amount in lamports for QR code:", amount.toString());
+      console.log("Selected file price in SOL for QR code:", priceInSOL);
 
       // Generate the URL for the payment request
       const url = encodeURL({
         recipient,
-        amount,
+        amount: new BigNumber(priceInSOL),
+        memo: uniqueMemo,
       });
 
       // Create a QR code for the payment request
