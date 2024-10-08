@@ -52,7 +52,7 @@ export const updateFileMetadata = async (
 ) => {
   try {
     // Send metadata to backend to process DRM and upload to IPFS
-    const response = await fetch("http://localhost:5000/process-file", {
+    const response = await fetch(".netlify/functions/processFile", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
