@@ -123,7 +123,7 @@ function BuyerPage({ provider }) {
             console.error("Error checking payment status:", error);
           }
         }
-      }, 1000); // Poll every second
+      }, 5000);
 
       const timeout = setTimeout(() => {
         clearInterval(interval);
@@ -148,9 +148,6 @@ function BuyerPage({ provider }) {
     setShowCryptoModal(true);
     setStatus("Please complete the payment to receive the file.");
     setCountdown(PAYMENT_TIMEOUT / 1000);
-
-    // Create the Solana Pay QR Code after reference is set
-    // Use useEffect to wait for reference to be set before generating the QR code
   };
 
   // Effect to generate QR after reference is set
@@ -173,13 +170,13 @@ function BuyerPage({ provider }) {
       reference, // Add the reference to track the transaction
     });
 
-    const qr = createQR(url, 200, "transparent"); // Create QR with a size of 200px
-
-    // Append the QR code to the DOM
-    const qrCodeElement = document.getElementById("solana-payment-qr");
-    if (qrCodeElement) {
-      qrCodeElement.innerHTML = ""; // Clear any previous QR code
-      qr.append(qrCodeElement); // Append the newly generated QR code
+    // Ensure QR only renders once
+    if (!document.querySelector("#solana-payment-qr img")) {
+      const qr = createQR(url, 200, "transparent"); // Create QR with a size of 200px
+      const qrCodeElement = document.getElementById("solana-payment-qr");
+      if (qrCodeElement) {
+        qr.append(qrCodeElement); // Append the QR code only once
+      }
     }
 
     // Start payment listening after generating the QR code
