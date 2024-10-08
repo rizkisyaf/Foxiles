@@ -1,7 +1,7 @@
 /** @type {any} */
 const axios = require("axios");
 
-export const fetchEncryptedFile = async (fileCid) => {
+const fetchEncryptedFile = async (fileCid) => {
   try {
     console.log(`Fetching file data for CID: ${fileCid}`);
 
@@ -26,4 +26,9 @@ export const fetchEncryptedFile = async (fileCid) => {
     console.error("Error fetching encrypted file from IPFS:", error);
     throw error;
   }
+};
+
+// Export the function using CommonJS syntax
+module.exports = {
+  fetchEncryptedFile,
 };
