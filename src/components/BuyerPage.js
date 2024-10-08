@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { Connection, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL, PublicKey, Connection } from "@solana/web3.js";
 import { Oval } from "react-loader-spinner";
 import { motion } from "framer-motion";
 import { fetchUploaderFiles } from "../utils/UploaderService";
@@ -12,10 +12,10 @@ import BigNumber from "bignumber.js";
 import "./BuyerPage.css";
 
 const ITEMS_PER_PAGE = 8;
-const PAYMENT_CHECK_INTERVAL = 5000;
-const PAYMENT_TIMEOUT = 180000;
+const PAYMENT_CHECK_INTERVAL = 5000; // 5 seconds
+const PAYMENT_TIMEOUT = 180000; // 180 seconds
 
-function BuyerPage({ provider, walletServicesPlugin }) {
+function BuyerPage({ provider }) {
   const { influencerId } = useParams();
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -28,10 +28,10 @@ function BuyerPage({ provider, walletServicesPlugin }) {
   const [uniqueMemo, setUniqueMemo] = useState(null);
   const [paymentTimeout, setPaymentTimeout] = useState(null);
   const [paymentInterval, setPaymentInterval] = useState(null);
+  const [countdown, setCountdown] = useState(PAYMENT_TIMEOUT / 1000);
 
   const connection = new Connection("https://api.devnet.solana.com");
 
-  // Fetch uploader files metadata
   const fetchUploaderFilesMetadata = useCallback(async () => {
     setLoading(true);
     setStatus("Fetching uploader's files...");
@@ -61,7 +61,6 @@ function BuyerPage({ provider, walletServicesPlugin }) {
     fetchUploaderFilesMetadata();
   }, [fetchUploaderFilesMetadata]);
 
-  // Handle payment confirmation logic
   const handlePaymentConfirmed = useCallback(async () => {
     setStatus("Payment confirmed. Preparing your file for decryption...");
     setOverlayLoading(true);
@@ -98,12 +97,12 @@ function BuyerPage({ provider, walletServicesPlugin }) {
       setOverlayLoading(false);
       setShowCryptoModal(false);
       setUniqueMemo(null);
+      setSelectedFile(null);
       clearTimeout(paymentTimeout);
       clearInterval(paymentInterval);
     }
-  }, [selectedFile, paymentInterval, paymentTimeout]);
+  }, [selectedFile, paymentTimeout, paymentInterval]);
 
-  // Generate QR code and start payment
   useEffect(() => {
     if (showCryptoModal && uniqueMemo) {
       const interval = setInterval(async () => {
@@ -115,8 +114,8 @@ function BuyerPage({ provider, walletServicesPlugin }) {
             }
           );
 
-          const payment = confirmedSignatures.find(
-            (signatureInfo) => signatureInfo.memo === uniqueMemo
+          const payment = confirmedSignatures.find((signatureInfo) =>
+            signatureInfo.memo === uniqueMemo
           );
 
           if (payment) {
@@ -130,17 +129,26 @@ function BuyerPage({ provider, walletServicesPlugin }) {
       const timeout = setTimeout(() => {
         clearInterval(interval);
         setShowCryptoModal(false);
-        setStatus(
-          "Payment not completed within the time limit. Please try again."
-        );
+        setStatus("Payment not completed within the time limit. Please try again.");
       }, PAYMENT_TIMEOUT);
 
       setPaymentInterval(interval);
       setPaymentTimeout(timeout);
 
+      const countdownInterval = setInterval(() => {
+        setCountdown((prevCountdown) => {
+          if (prevCountdown <= 1) {
+            clearInterval(countdownInterval);
+            return 0;
+          }
+          return prevCountdown - 1;
+        });
+      }, 1000);
+
       return () => {
         clearInterval(interval);
         clearTimeout(timeout);
+        clearInterval(countdownInterval);
       };
     }
   }, [showCryptoModal, uniqueMemo, handlePaymentConfirmed, connection]);
@@ -172,7 +180,6 @@ function BuyerPage({ provider, walletServicesPlugin }) {
     }
   }, [showCryptoModal, selectedFile, uniqueMemo, influencerId]);
 
-  // Pagination and file display logic
   const paginatedFiles = files.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
@@ -191,15 +198,15 @@ function BuyerPage({ provider, walletServicesPlugin }) {
   };
 
   const handleBuyFileWithCrypto = (file) => {
-    // Generate a unique memo only when a file is selected for purchase
     if (!uniqueMemo || selectedFile !== file) {
-      const newMemo = uuidv4(); // Use UUID for uniqueness
+      const newMemo = uuidv4();
       setUniqueMemo(newMemo);
     }
 
     setSelectedFile(file);
     setShowCryptoModal(true);
     setStatus("Please complete the payment to receive the file.");
+    setCountdown(PAYMENT_TIMEOUT / 1000);
   };
 
   return (
@@ -277,8 +284,8 @@ function BuyerPage({ provider, walletServicesPlugin }) {
                 <h4>Payment Instructions</h4>
                 <p>Scan the QR code or use a compatible wallet to pay:</p>
                 <div id="solana-payment-qr"></div>{" "}
-                {/* Place to render Solana Pay QR Code */}
                 <p className="wallet-address-full">{influencerId}</p>
+                <p>Time remaining: {countdown} seconds</p>
                 {overlayLoading && (
                   <div className="overlay-loading">
                     <Oval color="#007bff" height={50} width={50} />
