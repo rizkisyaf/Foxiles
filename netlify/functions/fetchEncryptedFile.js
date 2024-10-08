@@ -1,4 +1,5 @@
-import axios from "axios";
+/** @type {any} */
+const axios = require("axios");
 
 export const fetchEncryptedFile = async (fileCid) => {
   try {

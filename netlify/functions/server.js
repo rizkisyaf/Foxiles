@@ -73,7 +73,7 @@ app.post("/.netlify/functions/uploadToPinata", async (req, res) => {
 
 // Fetch encrypted file from IPFS
 app.get(
-  "/.netlify/functions/fetch-encrypted-file/:fileCid",
+  "/.netlify/functions/fetchEncryptedFile/:fileCid",
   async (req, res) => {
     const { fileCid } = req.params;
 
