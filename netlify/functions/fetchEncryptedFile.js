@@ -1,14 +1,17 @@
 import axios from "axios";
 
-// Fetch encrypted file from IPFS
+// Fetch encrypted file from IPFS using Pinata gateway with JWT authorization
 export const fetchEncryptedFile = async (fileCid) => {
   try {
     console.log("Fetching file from IPFS CID:", fileCid); // Debugging log
 
     const response = await axios.get(
-      `${process.env.REACT_APP_GATEWAY_URL}/ipfs/${fileCid}`,
+      `${process.env.REACT_APP_PINATA_GATEWAY_URL}/ipfs/${fileCid}`,
       {
         responseType: "arraybuffer", // Expect binary data
+        headers: {
+          Authorization: `Bearer ${process.env.REACT_APP_PINATA_JWT}`,
+        },
       }
     );
 
