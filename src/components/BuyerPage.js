@@ -124,22 +124,39 @@ function BuyerPage({ provider, walletServicesPlugin }) {
   const attemptAutoRetrieveSignature = async () => {
     if (walletServicesPlugin && provider) {
       try {
+        setStatus(
+          "Attempting to retrieve transaction signature automatically..."
+        );
+
+        // Assuming walletServicesPlugin can retrieve a completed transaction signature
         const response = await walletServicesPlugin.getTransactionSignature();
         if (response && response.signature) {
           setTransactionSignature(response.signature);
-          verifyPayment();
+          verifyPayment(); // Automatically verify the payment once the signature is retrieved
+        } else {
+          throw new Error(
+            "No signature retrieved. Please make sure the payment is completed."
+          );
         }
       } catch (error) {
         console.error("Auto-retrieval of signature failed:", error);
+        setStatus(
+          "Could not retrieve signature automatically. Please try again."
+        );
       }
     }
   };
 
   // Handle verifying the payment by sending the signature to backend
   const verifyPayment = async () => {
+    if (!transactionSignature) {
+      setStatus("Transaction signature is required for verification.");
+      return;
+    }
+
     try {
       setStatus("Verifying payment...");
-      const response = await fetch("/.netlify/functions/verifyPayment", {
+      const response = await fetch("/.netlify/functions/checkPayment", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -148,7 +165,7 @@ function BuyerPage({ provider, walletServicesPlugin }) {
           receiver: influencerId,
           amount: selectedFile.price,
           memo: uniqueMemo,
-          signature: transactionSignature, // Pass the transaction signature here
+          signature: transactionSignature, // Use automatically retrieved signature here
         }),
       });
 
@@ -161,7 +178,7 @@ function BuyerPage({ provider, walletServicesPlugin }) {
         setStatus("Verification failed: " + data.message);
         if (retryCount < 3) {
           setRetryCount((prev) => prev + 1);
-          verifyPayment();
+          verifyPayment(); // Retry verification if needed
         }
       }
     } catch (error) {
@@ -284,31 +301,6 @@ function BuyerPage({ provider, walletServicesPlugin }) {
                 <div id="solana-payment-qr"></div>{" "}
                 {/* Place to render Solana Pay QR Code */}
                 <p className="wallet-address-full">{influencerId}</p>
-                {/* Input for user to paste transaction signature */}
-                <input
-                  type="text"
-                  value={transactionSignature}
-                  onChange={(e) => setTransactionSignature(e.target.value)}
-                  placeholder="Enter Transaction Signature"
-                  className="input-field"
-                />
-                <button
-                  onClick={verifyPayment}
-                  className="verify-payment-button"
-                >
-                  Verify Payment
-                </button>
-                <button
-                  onClick={() => {
-                    setShowCryptoModal(false);
-                    setSelectedFile(null);
-                    setTransactionSignature("");
-                    setUniqueMemo(null);
-                  }}
-                  className="close-modal-button"
-                >
-                  Close
-                </button>
                 {overlayLoading && (
                   <div className="overlay-loading">
                     <Oval color="#007bff" height={50} width={50} />

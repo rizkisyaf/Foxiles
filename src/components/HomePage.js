@@ -386,16 +386,9 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
 
   const handleTopUp = () => {
     const recipient = new PublicKey(walletPublicKey);
-    const amount = new BigNumber(topUpAmount);
-
-    if (amount.isNaN() || amount.lte(0)) {
-      alert("Please enter a valid amount.");
-      return;
-    }
 
     const url = encodeURL({
       recipient,
-      amount: amount,
     });
 
     const qr = createQR(url, 200, "transparent");
@@ -477,16 +470,7 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
         <div className="topup-modal">
           <div className="modal-content">
             <h3>Fund Your Wallet</h3>
-            <p>To proceed with uploading, please fund your wallet.</p>
-
-            {/* Input for User to Enter Top-Up Amount */}
-            <input
-              type="number"
-              value={topUpAmount}
-              onChange={(e) => setTopUpAmount(e.target.value)}
-              placeholder="Enter amount in SOL"
-              className="input-field"
-            />
+            <p>To proceed with uploading, please fund your wallet using the QR code below.</p>
 
             {/* Render the Solana Pay QR Code */}
             <div id="solana-top-up-qr"></div>
