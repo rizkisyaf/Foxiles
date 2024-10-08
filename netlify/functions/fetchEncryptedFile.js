@@ -15,9 +15,9 @@ const fetchEncryptedFile = async (fileCid) => {
       }
     );
 
-    if (response.headers['content-type'] !== 'application/octet-stream') {
+    if (response.headers["content-type"] !== "application/octet-stream") {
       throw new Error(
-        `Unexpected response type: ${response.headers['content-type']}`
+        `Unexpected response type: ${response.headers["content-type"]}`
       );
     }
 
@@ -29,4 +29,4 @@ const fetchEncryptedFile = async (fileCid) => {
 };
 
 // Export the function using CommonJS syntax
-module.exports = fetchEncryptedFile;
+module.exports = { fetchEncryptedFile };

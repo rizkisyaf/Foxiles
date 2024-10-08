@@ -4,9 +4,9 @@
 
 [functions]
   directory = "netlify/functions"
-  node_bundler = "esbuild"
+  node_bundler = "zip-it-and-ship-it"
 
 [[redirects]]
-  from = "/.netlify/functions/*"
-  to = "/.netlify/functions/:splat"
+  from = "/functions/*"
+  to = "/functions/:splat"
   status = 200

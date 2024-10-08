@@ -9,7 +9,7 @@ const { Connection, PublicKey } = require("@solana/web3.js");
 const serverless = require("serverless-http");
 const { handler: processFileHandler } = require("./processFile");
 const { handler: uploadToPinataHandler } = require("./uploadToPinata");
-const fetchEncryptedFile = require("./fetchEncryptedFile.js");
+const { fetchEncryptedFile } = require("./fetchEncryptedFile.js");
 
 const app = express();
 const connection = new Connection("https://api.devnet.solana.com", "confirmed");
@@ -72,28 +72,25 @@ app.post("/.netlify/functions/uploadToPinata", async (req, res) => {
 });
 
 // Fetch encrypted file from IPFS
-app.get(
-  "/.netlify/functions/fetchEncryptedFile/:fileCid",
-  async (req, res) => {
-    const { fileCid } = req.params;
+app.get("/.netlify/functions/fetchEncryptedFile/:fileCid", async (req, res) => {
+  const { fileCid } = req.params;
 
-    try {
-      console.log(`Received request for file CID: ${fileCid}`);
-      const fileBuffer = await fetchEncryptedFile(fileCid);
+  try {
+    console.log(`Received request for file CID: ${fileCid}`);
+    const fileBuffer = await fetchEncryptedFile(fileCid);
 
-      if (!fileBuffer) {
-        console.log("File not found in IPFS.");
-        return res.status(404).send("File not found.");
-      }
-
-      console.log(`File buffer size: ${fileBuffer.length}`);
-      res.set("Content-Type", "application/octet-stream");
-      res.send(fileBuffer);
-    } catch (error) {
-      console.error("Error fetching file from IPFS:", error);
-      res.status(500).json({ error: "Failed to fetch file from IPFS" });
+    if (!fileBuffer) {
+      console.log("File not found in IPFS.");
+      return res.status(404).send("File not found.");
     }
+
+    console.log(`File buffer size: ${fileBuffer.length}`);
+    res.set("Content-Type", "application/octet-stream");
+    res.send(fileBuffer);
+  } catch (error) {
+    console.error("Error fetching file from IPFS:", error);
+    res.status(500).json({ error: "Failed to fetch file from IPFS" });
   }
-);
+});
 
 module.exports.handler = serverless(app);
