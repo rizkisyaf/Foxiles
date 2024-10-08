@@ -27,6 +27,7 @@ function BuyerPage({ provider }) {
   const [paymentTimeout, setPaymentTimeout] = useState(null);
   const [paymentInterval, setPaymentInterval] = useState(null);
   const [countdown, setCountdown] = useState(PAYMENT_TIMEOUT / 1000);
+  const [qrRendered, setQrRendered] = useState(false); // Track if QR has been rendered
 
   const connection = new Connection("https://api.devnet.solana.com");
 
@@ -98,6 +99,7 @@ function BuyerPage({ provider }) {
       setShowCryptoModal(false);
       setReference(null);
       setSelectedFile(null);
+      setQrRendered(false); // Reset QR render tracking
       clearTimeout(paymentTimeout);
       clearInterval(paymentInterval);
     }
@@ -148,11 +150,12 @@ function BuyerPage({ provider }) {
     setShowCryptoModal(true);
     setStatus("Please complete the payment to receive the file.");
     setCountdown(PAYMENT_TIMEOUT / 1000);
+    setQrRendered(false); // Reset QR render flag when modal is reopened
   };
 
   // Effect to generate QR after reference is set
   useEffect(() => {
-    if (!reference || !selectedFile) return;
+    if (!reference || !selectedFile || qrRendered) return;
 
     const recipient = new PublicKey(influencerId);
     const priceInSOL = parseFloat(selectedFile.price);
@@ -171,17 +174,17 @@ function BuyerPage({ provider }) {
     });
 
     // Ensure QR only renders once
-    if (!document.querySelector("#solana-payment-qr img")) {
-      const qr = createQR(url, 200, "transparent"); // Create QR with a size of 200px
-      const qrCodeElement = document.getElementById("solana-payment-qr");
-      if (qrCodeElement) {
-        qr.append(qrCodeElement); // Append the QR code only once
-      }
+    const qrCodeElement = document.getElementById("solana-payment-qr");
+    if (qrCodeElement && !qrRendered) {
+      qrCodeElement.innerHTML = ""; // Clear any previous QR code
+      const qr = createQR(url, 200, "transparent");
+      qr.append(qrCodeElement); // Append the newly generated QR code
+      setQrRendered(true); // Mark QR as rendered
     }
 
     // Start payment listening after generating the QR code
     startPaymentListening();
-  }, [reference, selectedFile, influencerId, startPaymentListening]);
+  }, [reference, selectedFile, influencerId, startPaymentListening, qrRendered]);
 
   // Effect for countdown timer
   useEffect(() => {
@@ -193,6 +196,13 @@ function BuyerPage({ provider }) {
       return () => clearInterval(countdownInterval);
     }
   }, [showCryptoModal, countdown]);
+
+  const handleModalClose = () => {
+    setShowCryptoModal(false); // Close the modal
+    setReference(null); // Reset reference
+    setQrRendered(false); // Reset QR render flag
+    setCountdown(PAYMENT_TIMEOUT / 1000); // Reset countdown
+  };
 
   const paginatedFiles = files.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
@@ -282,6 +292,9 @@ function BuyerPage({ provider }) {
           </div>
           {showCryptoModal && selectedFile && reference && (
             <div className="crypto-modal">
+              <div className="modal-close" onClick={handleModalClose}>
+                &times;
+              </div>
               <div className="buyer-modal-content">
                 <h4>Payment Instructions</h4>
                 <p>Scan the QR code or use a compatible wallet to pay:</p>
