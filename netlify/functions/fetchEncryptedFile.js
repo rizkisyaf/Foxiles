@@ -29,6 +29,4 @@ const fetchEncryptedFile = async (fileCid) => {
 };
 
 // Export the function using CommonJS syntax
-module.exports = {
-  fetchEncryptedFile,
-};
+module.exports = fetchEncryptedFile;

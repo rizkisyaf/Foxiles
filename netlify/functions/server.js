@@ -9,7 +9,7 @@ const { Connection, PublicKey } = require("@solana/web3.js");
 const serverless = require("serverless-http");
 const { handler: processFileHandler } = require("./processFile");
 const { handler: uploadToPinataHandler } = require("./uploadToPinata");
-const { fetchEncryptedFile } = require("./fetchEncryptedFile.js");
+const fetchEncryptedFile = require("./fetchEncryptedFile.js");
 
 const app = express();
 const connection = new Connection("https://api.devnet.solana.com", "confirmed");
