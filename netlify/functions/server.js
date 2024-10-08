@@ -71,28 +71,27 @@ app.post("/.netlify/functions/uploadToPinata", async (req, res) => {
   }
 });
 
-// Netlify function to fetch encrypted file
+// Fetch encrypted file from IPFS
 app.get(
   "/.netlify/functions/fetch-encrypted-file/:fileCid",
   async (req, res) => {
     const { fileCid } = req.params;
 
     try {
-      console.log(`Fetching encrypted file with CID: ${fileCid}`);
+      console.log(`Received request for file CID: ${fileCid}`);
       const fileBuffer = await fetchEncryptedFile(fileCid);
-      console.log(`File buffer received, size: ${fileBuffer.length} bytes`);
-      console.log("File Buffer Received:", fileBuffer);
 
       if (!fileBuffer) {
+        console.log("File not found in IPFS.");
         return res.status(404).send("File not found.");
       }
 
-      // Send the raw file as binary data
+      console.log(`File buffer size: ${fileBuffer.length}`);
       res.set("Content-Type", "application/octet-stream");
       res.send(fileBuffer);
     } catch (error) {
-      console.error("Error fetching encrypted file data:", error.message);
-      res.status(500).json({ error: "Failed to fetch encrypted file data" });
+      console.error("Error fetching file from IPFS:", error);
+      res.status(500).json({ error: "Failed to fetch file from IPFS" });
     }
   }
 );

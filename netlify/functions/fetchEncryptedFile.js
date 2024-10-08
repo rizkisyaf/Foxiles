@@ -2,7 +2,7 @@ import axios from "axios";
 
 export const fetchEncryptedFile = async (fileCid) => {
   try {
-    console.log("Fetching file from IPFS CID:", fileCid);
+    console.log(`Fetching file data for CID: ${fileCid}`);
 
     const response = await axios.get(
       `${process.env.REACT_APP_PINATA_GATEWAY_URL}/ipfs/${fileCid}`,
