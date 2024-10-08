@@ -99,7 +99,7 @@ function BuyerPage({ provider }) {
       setShowCryptoModal(false);
       setReference(null);
       setSelectedFile(null);
-      setQrRendered(false); // Reset QR render tracking
+      setQrRendered(false);
       clearTimeout(paymentTimeout);
       clearInterval(paymentInterval);
     }
