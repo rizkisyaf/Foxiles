@@ -10,7 +10,6 @@ const serverless = require("serverless-http");
 const { handler: processFileHandler } = require("./processFile");
 const { handler: uploadToPinataHandler } = require("./uploadToPinata");
 const { fetchEncryptedFile } = require("./fetchEncryptedFile.js");
-const { handler: checkPayment } = require("./checkPayment.js");
 
 const app = express();
 const connection = new Connection("https://api.devnet.solana.com", "confirmed");
@@ -83,20 +82,5 @@ app.get("/.netlify/functions/fetch-encrypted-file/:fileCid", async (req, res) =>
     res.status(500).json({ error: "Failed to fetch encrypted file data" });
   }
 });
-
-// Check payment route
-app.post("/.netlify/functions/check-payment", async (req, res) => {
-  try {
-    const event = {
-      body: JSON.stringify(req.body),
-    };
-    const result = await checkPayment(event);
-    res.status(result.statusCode).json(JSON.parse(result.body));
-  } catch (error) {
-    console.error("Error checking payment:", error);
-    res.status(500).send({ error: error.message });
-  }
-});
-
 
 module.exports.handler = serverless(app);
