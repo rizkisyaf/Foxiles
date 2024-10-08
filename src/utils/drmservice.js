@@ -34,7 +34,7 @@ export const fetchEncryptedFileData = async (fileCid) => {
     console.log(`Fetching file data for CID: ${fileCid}`); // Debugging log
 
     const response = await fetch(
-      "/.netlify/functions/fetch-encrypted-file/:fileCid"
+      `https://foxiles.xyz/.netlify/functions/fetch-encrypted-file/${fileCid}`
     );
 
     if (!response.ok) {

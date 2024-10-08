@@ -24,7 +24,9 @@ app.post("/.netlify/functions/processFile", async (req, res) => {
 
 // Route to upload processed DRM file to Pinata
 app.post("/.netlify/functions/uploadToPinata", async (req, res) => {
-  const result = await uploadToPinataHandler({ body: JSON.stringify(req.body) });
+  const result = await uploadToPinataHandler({
+    body: JSON.stringify(req.body),
+  });
   res.status(result.statusCode).json(JSON.parse(result.body));
 });
 
@@ -70,17 +72,25 @@ app.post("/.netlify/functions/uploadToPinata", async (req, res) => {
 });
 
 // Fetch encrypted file from IPFS
-app.get("/.netlify/functions/fetch-encrypted-file/:fileCid", async (req, res) => {
-  const { fileCid } = req.params;
+app.get(
+  "/.netlify/functions/fetch-encrypted-file/:fileCid",
+  async (req, res) => {
+    const { fileCid } = req.params;
 
-  try {
-    const fileBuffer = await fetchEncryptedFile(fileCid);
-    res.set("Content-Type", "application/octet-stream");
-    res.send(fileBuffer);
-  } catch (error) {
-    console.error("Error fetching encrypted file data:", error.message);
-    res.status(500).json({ error: "Failed to fetch encrypted file data" });
+    try {
+      console.log(`Fetching encrypted file with CID: ${fileCid}`);
+      const fileBuffer = await fetchEncryptedFile(fileCid);
+      console.log(`File buffer received, size: ${fileBuffer.length} bytes`);
+      if (!fileBuffer) {
+        return res.status(404).send("File not found.");
+      }
+      res.set("Content-Type", "application/octet-stream");
+      res.send(fileBuffer);
+    } catch (error) {
+      console.error("Error fetching encrypted file data:", error.message);
+      res.status(500).json({ error: "Failed to fetch encrypted file data" });
+    }
   }
-});
+);
 
 module.exports.handler = serverless(app);
