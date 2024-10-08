@@ -12,6 +12,7 @@
   "dependencies": {
     "@solana/web3.js": "^1.95.3",
     "dotenv": "^16.4.5",
+    "socket.io": "^4.8.0",
     "ws": "^8.18.0"
   }
 }

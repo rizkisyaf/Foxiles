@@ -1,45 +1,54 @@
-import WebSocket from 'ws';
+import { io } from 'socket.io-client';
 
 export async function handler(event, context) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket('wss://ws.foxiles.xyz');
+    // Establish a connection to the Socket.IO server
+    const socket = io('wss://ws.foxiles.xyz', {
+      transports: ['websocket'], // Use WebSocket as the transport mechanism
+    });
 
-    ws.on('open', () => {
+    socket.on('connect', () => {
       // Parsing incoming request data
       const { receiver, amount, memo } = JSON.parse(event.body);
 
-      ws.send(JSON.stringify({ receiver, amount, memo }));
+      // Send payment details to the Socket.IO server
+      socket.emit('checkPayment', { receiver, amount, memo });
     });
 
-    ws.on('message', (data) => {
-      // Convert data to a string before parsing
-      const responseString = data.toString();
-      const response = JSON.parse(responseString);
-      
-      if (response.status === 'success') {
-        resolve({
-          statusCode: 200,
-          body: JSON.stringify({ message: 'Payment found', signature: response.signature })
-        });
-      } else if (response.status === 'not_found') {
-        resolve({
-          statusCode: 404,
-          body: JSON.stringify({ message: 'Payment not found' })
-        });
-      } else {
-        resolve({
-          statusCode: 500,
-          body: JSON.stringify({ message: 'Error', error: response.message })
-        });
-      }
-      ws.close();
+    // Handle payment success
+    socket.on('paymentSuccess', (data) => {
+      resolve({
+        statusCode: 200,
+        body: JSON.stringify({ message: 'Payment found', signature: data.signature })
+      });
+      socket.disconnect();
     });
 
-    ws.on('error', (error) => {
+    // Handle payment not found
+    socket.on('paymentNotFound', () => {
+      resolve({
+        statusCode: 404,
+        body: JSON.stringify({ message: 'Payment not found' })
+      });
+      socket.disconnect();
+    });
+
+    // Handle payment error
+    socket.on('paymentError', (data) => {
+      resolve({
+        statusCode: 500,
+        body: JSON.stringify({ message: 'Error', error: data.message })
+      });
+      socket.disconnect();
+    });
+
+    // Handle connection error
+    socket.on('connect_error', (error) => {
       reject({
         statusCode: 500,
         body: JSON.stringify({ message: 'WebSocket Error', error: error.message })
       });
+      socket.disconnect();
     });
   });
 }

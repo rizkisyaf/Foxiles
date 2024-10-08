@@ -8,6 +8,7 @@ import { decryptFile, fetchEncryptedFileData } from "../utils/drmservice";
 import { QRCodeCanvas } from "qrcode.react";
 import logo from "../assets/2.png";
 import { v4 as uuidv4 } from "uuid"; // For generating unique memo
+import io from "socket.io-client";
 import "./BuyerPage.css";
 
 const ITEMS_PER_PAGE = 8;
@@ -22,8 +23,8 @@ function BuyerPage({ provider }) {
   const [overlayLoading, setOverlayLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [uniqueMemo, setUniqueMemo] = useState(null); // Unique memo for the buyer
-  const wsRef = useRef(null); // Track WebSocket with useRef
+  const [uniqueMemo, setUniqueMemo] = useState(null);
+  const socketRef = useRef(null);
 
   console.log("Influencer ID:", influencerId);
 
@@ -100,49 +101,48 @@ function BuyerPage({ provider }) {
   // WebSocket setup and handle payment confirmation
   useEffect(() => {
     if (showCryptoModal && selectedFile && uniqueMemo) {
-      // Establish WebSocket connection
-      wsRef.current = new WebSocket("wss://ws.foxiles.xyz");
+      // Establish Socket.IO connection
+      socketRef.current = io("wss://ws.foxiles.xyz");
 
-      wsRef.current.onopen = () => {
-        console.log("WebSocket connection established");
+      socketRef.current.on("connect", () => {
+        console.log("Socket.IO connection established");
         setStatus("Waiting for payment confirmation...");
 
-        // Send payment details to WebSocket server
-        wsRef.current.send(
-          JSON.stringify({
-            receiver: influencerId,
-            amount: selectedFile.price,
-            memo: uniqueMemo,
-          })
-        );
-      };
+        // Send payment details to the server
+        socketRef.current.emit("checkPayment", {
+          receiver: influencerId,
+          amount: selectedFile.price,
+          memo: uniqueMemo,
+        });
+      });
 
-      wsRef.current.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.status === "success") {
-          handlePaymentConfirmed(); // Call payment confirmation handler
-        } else if (data.status === "not_found") {
-          console.log("Payment not found, waiting...");
-        } else {
-          console.error("WebSocket Error:", data.message);
-          setStatus("Error processing payment. Please try again.");
-          setShowCryptoModal(false);
-        }
-      };
+      socketRef.current.on("paymentSuccess", (data) => {
+        handlePaymentConfirmed(); // Call payment confirmation handler
+      });
 
-      wsRef.current.onerror = (error) => {
-        console.error("WebSocket Error:", error);
-        setStatus("Error connecting to payment server.");
+      socketRef.current.on("paymentNotFound", () => {
+        console.log("Payment not found, waiting...");
+      });
+
+      socketRef.current.on("paymentError", (data) => {
+        console.error("Socket.IO Error:", data.message);
+        setStatus("Error processing payment. Please try again.");
         setShowCryptoModal(false);
-      };
+      });
 
       return () => {
-        if (wsRef.current) {
-          wsRef.current.close(); // Close WebSocket connection on cleanup
+        if (socketRef.current) {
+          socketRef.current.disconnect();
         }
       };
     }
-  }, [showCryptoModal, selectedFile, uniqueMemo, influencerId, handlePaymentConfirmed]);
+  }, [
+    showCryptoModal,
+    selectedFile,
+    uniqueMemo,
+    influencerId,
+    handlePaymentConfirmed,
+  ]);
 
   // Pagination and file display logic
   const paginatedFiles = files.slice(

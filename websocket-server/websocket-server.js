@@ -1,7 +1,7 @@
 // websocket-server.js
-const WebSocket = require('ws');
-const { Connection, PublicKey, LAMPORTS_PER_SOL } = require('@solana/web3.js');
-require('dotenv').config();
+const { Server } = require("socket.io");
+const { Connection, PublicKey, LAMPORTS_PER_SOL } = require("@solana/web3.js");
+require("dotenv").config();
 
 // Validate and assign RPC URL
 const rpcUrl = process.env.REACT_APP_RPC_URL;
@@ -12,38 +12,37 @@ if (!rpcUrl) {
 
 const connection = new Connection(rpcUrl, "confirmed");
 
-// Initialize WebSocket server
-const wss = new WebSocket.Server({ port: 8080 }); // Replace port if necessary
+// Initialize Socket.IO server
+const io = new Server(8080, {
+  cors: {
+    origin: "*",
+  },
+});
 
-wss.on('connection', (ws) => {
-  console.log('New client connected');
+io.on("connection", (socket) => {
+  console.log("New client connected");
 
-  ws.on('message', async (rawMessage) => {
+  // Handle incoming payment requests
+  socket.on("checkPayment", async ({ receiver, amount, memo }) => {
     try {
-      // Convert the raw message to string
-      const message = rawMessage.toString();
-
-      const { receiver, amount, memo } = JSON.parse(message);
-
       if (!receiver || !amount || !memo) {
-        ws.send(JSON.stringify({ status: "error", message: "Invalid input data." }));
+        socket.emit("paymentError", { message: "Invalid input data." });
         return;
       }
 
       const receiverPublicKey = new PublicKey(receiver);
 
       // Fetching transaction signatures related to the receiver
-      const signatures = await connection.getConfirmedSignaturesForAddress2(receiverPublicKey, { limit: 20 });
+      const signatures = await connection.getSignaturesForAddress(receiverPublicKey, { limit: 20 });
 
       let foundTransaction = null;
 
       for (let signature of signatures) {
-        const transaction = await connection.getParsedConfirmedTransaction(signature.signature);
+        const transaction = await connection.getParsedTransaction(signature.signature);
         if (!transaction) continue;
 
         // Find and check instructions in transaction
         for (let instruction of transaction.transaction.message.instructions) {
-          // Ensure instruction is of type ParsedInstruction
           if ('parsed' in instruction && instruction.programId.toString() === "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA") {
             const parsedInstruction = instruction;
 
@@ -61,18 +60,18 @@ wss.on('connection', (ws) => {
       }
 
       if (foundTransaction) {
-        ws.send(JSON.stringify({ status: "success", signature: foundTransaction }));
+        socket.emit("paymentSuccess", { signature: foundTransaction });
       } else {
-        ws.send(JSON.stringify({ status: "not_found" }));
+        socket.emit("paymentNotFound");
       }
     } catch (error) {
-      ws.send(JSON.stringify({ status: "error", message: error.message }));
+      socket.emit("paymentError", { message: error.message });
     }
   });
 
-  ws.on('close', () => {
-    console.log('Client disconnected');
+  socket.on("disconnect", () => {
+    console.log("Client disconnected");
   });
 });
 
-console.log('WebSocket server running on ws://localhost:8080');
+console.log("Socket.IO server running on ws://localhost:8080");
