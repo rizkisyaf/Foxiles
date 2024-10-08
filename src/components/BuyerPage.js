@@ -103,7 +103,16 @@ function BuyerPage({ provider, walletServicesPlugin }) {
   useEffect(() => {
     if (showCryptoModal && selectedFile && uniqueMemo) {
       const recipient = new PublicKey(influencerId);
-      const amount = new BigNumber(selectedFile.price).times(LAMPORTS_PER_SOL);
+
+      // Ensure the price is properly parsed as a number and multiplied by LAMPORTS_PER_SOL
+      const priceInSOL = parseFloat(selectedFile.price);
+      if (isNaN(priceInSOL) || priceInSOL <= 0) {
+        console.error("Invalid price for selected file:", selectedFile.price);
+        setStatus("Invalid price for the selected file. Please try again.");
+        return;
+      }
+
+      const amount = new BigNumber(priceInSOL).times(LAMPORTS_PER_SOL);
 
       // Generate the URL for the payment request
       const url = encodeURL({
@@ -115,8 +124,10 @@ function BuyerPage({ provider, walletServicesPlugin }) {
       // Create a QR code for the payment request
       const qr = createQR(url, 200, "transparent");
       const qrCodeElement = document.getElementById("solana-payment-qr");
-      qrCodeElement.innerHTML = "";
-      qr.append(qrCodeElement);
+      if (qrCodeElement) {
+        qrCodeElement.innerHTML = "";
+        qr.append(qrCodeElement);
+      }
     }
   }, [showCryptoModal, selectedFile, uniqueMemo, influencerId]);
 
