@@ -110,6 +110,21 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
     }
   }, [provider, web3auth]);
 
+  // Generate QR code for wallet top-up after modal is shown
+  useEffect(() => {
+    if (showTopUpModal) {
+      const recipient = new PublicKey(walletPublicKey);
+      const url = encodeURL({ recipient });
+
+      const qr = createQR(url, 200, "transparent");
+      const qrCodeElement = document.getElementById("solana-top-up-qr");
+      if (qrCodeElement) {
+        qrCodeElement.innerHTML = "";
+        qr.append(qrCodeElement);
+      }
+    }
+  }, [showTopUpModal, walletPublicKey]);
+
   const navigateToDashboard = () => {
     navigate("/uploaderdashboard");
   };
@@ -385,17 +400,6 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
   };
 
   const handleTopUp = () => {
-    const recipient = new PublicKey(walletPublicKey);
-
-    const url = encodeURL({
-      recipient,
-    });
-
-    const qr = createQR(url, 200, "transparent");
-    const qrCodeElement = document.getElementById("solana-top-up-qr");
-    qrCodeElement.innerHTML = "";
-    qr.append(qrCodeElement);
-
     setShowTopUpModal(true);
   };
 
@@ -470,7 +474,10 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
         <div className="topup-modal">
           <div className="modal-content">
             <h3>Fund Your Wallet</h3>
-            <p>To proceed with uploading, please fund your wallet using the QR code below.</p>
+            <p>
+              To proceed with uploading, please fund your wallet using the QR
+              code below.
+            </p>
 
             {/* Render the Solana Pay QR Code */}
             <div id="solana-top-up-qr"></div>
