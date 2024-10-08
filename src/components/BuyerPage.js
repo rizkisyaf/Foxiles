@@ -29,7 +29,7 @@ function BuyerPage({ provider, walletServicesPlugin }) {
   const [paymentTimeout, setPaymentTimeout] = useState(null);
   const [paymentInterval, setPaymentInterval] = useState(null);
 
-  const connection = new Connection("https://api.devnet-beta.solana.com");
+  const connection = new Connection("https://api.devnet.solana.com");
 
   // Fetch uploader files metadata
   const fetchUploaderFilesMetadata = useCallback(async () => {
