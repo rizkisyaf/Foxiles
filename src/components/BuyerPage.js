@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { Connection, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import { Oval } from "react-loader-spinner";
 import { motion } from "framer-motion";
 import { fetchUploaderFiles } from "../utils/UploaderService";
@@ -12,6 +12,8 @@ import BigNumber from "bignumber.js";
 import "./BuyerPage.css";
 
 const ITEMS_PER_PAGE = 8;
+const PAYMENT_CHECK_INTERVAL = 5000;
+const PAYMENT_TIMEOUT = 180000;
 
 function BuyerPage({ provider, walletServicesPlugin }) {
   const { influencerId } = useParams();
@@ -24,8 +26,10 @@ function BuyerPage({ provider, walletServicesPlugin }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [uniqueMemo, setUniqueMemo] = useState(null);
-  const [transactionSignature, setTransactionSignature] = useState("");
-  const [retryCount, setRetryCount] = useState(0);
+  const [paymentTimeout, setPaymentTimeout] = useState(null);
+  const [paymentInterval, setPaymentInterval] = useState(null);
+
+  const connection = new Connection("https://api.devnet-beta.solana.com");
 
   // Fetch uploader files metadata
   const fetchUploaderFilesMetadata = useCallback(async () => {
@@ -93,21 +97,59 @@ function BuyerPage({ provider, walletServicesPlugin }) {
     } finally {
       setOverlayLoading(false);
       setShowCryptoModal(false);
-      setUniqueMemo(null); // Reset memo after transaction completes
-      setSelectedFile(null); // Reset selected file
-      setTransactionSignature(""); // Reset transaction signature
+      setUniqueMemo(null);
+      clearTimeout(paymentTimeout);
+      clearInterval(paymentInterval);
     }
-  }, [selectedFile]);
+  }, [selectedFile, paymentInterval, paymentTimeout]);
 
   // Generate QR code and start payment
   useEffect(() => {
+    if (showCryptoModal && uniqueMemo) {
+      const interval = setInterval(async () => {
+        try {
+          const confirmedSignatures = await connection.getSignaturesForAddress(
+            new PublicKey(influencerId),
+            {
+              limit: 10,
+            }
+          );
+
+          const payment = confirmedSignatures.find(
+            (signatureInfo) => signatureInfo.memo === uniqueMemo
+          );
+
+          if (payment) {
+            handlePaymentConfirmed();
+          }
+        } catch (error) {
+          console.error("Error checking payment status:", error);
+        }
+      }, PAYMENT_CHECK_INTERVAL);
+
+      const timeout = setTimeout(() => {
+        clearInterval(interval);
+        setShowCryptoModal(false);
+        setStatus(
+          "Payment not completed within the time limit. Please try again."
+        );
+      }, PAYMENT_TIMEOUT);
+
+      setPaymentInterval(interval);
+      setPaymentTimeout(timeout);
+
+      return () => {
+        clearInterval(interval);
+        clearTimeout(timeout);
+      };
+    }
+  }, [showCryptoModal, uniqueMemo, handlePaymentConfirmed, connection]);
+
+  useEffect(() => {
     if (showCryptoModal && selectedFile && uniqueMemo) {
       const recipient = new PublicKey(influencerId);
-
-      // Ensure the price is properly parsed as a number and multiplied by LAMPORTS_PER_SOL
       let priceInSOL = parseFloat(selectedFile.price);
 
-      // Check if the price is NaN or less than zero; handle as an error if so
       if (isNaN(priceInSOL) || priceInSOL <= 0) {
         console.error("Invalid price for selected file:", selectedFile.price);
         setStatus("Invalid price for the selected file. Please try again.");
@@ -115,14 +157,12 @@ function BuyerPage({ provider, walletServicesPlugin }) {
       }
       console.log("Selected file price in SOL for QR code:", priceInSOL);
 
-      // Generate the URL for the payment request
       const url = encodeURL({
         recipient,
         amount: new BigNumber(priceInSOL),
         memo: uniqueMemo,
       });
 
-      // Create a QR code for the payment request
       const qr = createQR(url, 200, "transparent");
       const qrCodeElement = document.getElementById("solana-payment-qr");
       if (qrCodeElement) {
@@ -131,95 +171,6 @@ function BuyerPage({ provider, walletServicesPlugin }) {
       }
     }
   }, [showCryptoModal, selectedFile, uniqueMemo, influencerId]);
-
-  // Attempt to automatically retrieve transaction signature
-  const attemptAutoRetrieveSignature = async () => {
-    if (walletServicesPlugin && provider) {
-      try {
-        console.log("Attempting to retrieve transaction signature...");
-        setStatus(
-          "Attempting to retrieve transaction signature automatically..."
-        );
-
-        // Assuming walletServicesPlugin can retrieve a completed transaction signature
-        const response = await walletServicesPlugin.getTransactionSignature();
-        if (response && response.signature) {
-          setTransactionSignature(response.signature);
-          console.log("Transaction signature retrieved:", response.signature);
-          verifyPayment(response.signature);
-        } else {
-          throw new Error(
-            "No signature retrieved. Please make sure the payment is completed."
-          );
-        }
-      } catch (error) {
-        console.error("Auto-retrieval of signature failed:", error);
-        setStatus(
-          "Could not retrieve signature automatically. Please try again."
-        );
-      }
-    }
-  };
-
-  // Handle verifying the payment by sending the signature to backend
-  const verifyPayment = async (signature) => {
-    if (!signature) {
-      setStatus("Transaction signature is required for verification.");
-      return;
-    }
-
-    try {
-      setStatus("Verifying payment...");
-      console.log("Sending request to checkPayment function...");
-
-      const response = await fetch(
-        "https://foxiles.xyz/.netlify/functions/checkPayment",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            receiver: influencerId,
-            amount: selectedFile.price,
-            memo: uniqueMemo,
-            signature: signature,
-          }),
-        }
-      );
-
-      console.log("CheckPayment request sent. Awaiting response...");
-      const data = await response.json();
-      console.log("Response from checkPayment:", data);
-
-      if (response.status === 200) {
-        setStatus("Payment verified successfully.");
-        handlePaymentConfirmed(); // Call payment confirmation handler
-      } else {
-        console.log("Verification failed with status:", response.status);
-        setStatus("Verification failed: " + data.message);
-
-        if (retryCount < 3) {
-          console.log(`Retrying verification... attempt ${retryCount + 1}`);
-          setRetryCount((prev) => prev + 1);
-          verifyPayment(signature);
-        } else {
-          console.log("Maximum retry attempts reached. Verification failed.");
-        }
-      }
-    } catch (error) {
-      console.error("Error during payment verification:", error);
-      setStatus("Error during verification. Please try again.");
-
-      if (retryCount < 3) {
-        console.log(`Retrying verification... attempt ${retryCount + 1}`);
-        setRetryCount((prev) => prev + 1);
-        verifyPayment(signature);
-      } else {
-        console.log("Maximum retry attempts reached. Verification failed.");
-      }
-    }
-  };
 
   // Pagination and file display logic
   const paginatedFiles = files.slice(
@@ -249,9 +200,6 @@ function BuyerPage({ provider, walletServicesPlugin }) {
     setSelectedFile(file);
     setShowCryptoModal(true);
     setStatus("Please complete the payment to receive the file.");
-
-    // Attempt to automatically retrieve transaction signature
-    attemptAutoRetrieveSignature();
   };
 
   return (
