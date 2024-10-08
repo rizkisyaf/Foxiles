@@ -4,7 +4,8 @@ export async function handler(event, context) {
   return new Promise((resolve, reject) => {
     // Establish a connection to the Socket.IO server
     const socket = io('wss://ws.foxiles.xyz', {
-      transports: ['websocket'], // Use WebSocket as the transport mechanism
+      transports: ['websocket'],
+      reconnection: true,
     });
 
     socket.on('connect', () => {
@@ -12,8 +13,10 @@ export async function handler(event, context) {
       const { receiver, amount, memo } = JSON.parse(event.body);
 
       // Send payment details to the Socket.IO server
-      socket.emit('checkPayment', { receiver, amount, memo });
-    });
+      socket.emit("checkPayment", { receiver, amount, memo }, (ack) => {
+        console.log("Server acknowledged the request:", ack);
+      });
+    }); // <-- This closing bracket was missing
 
     // Handle payment success
     socket.on('paymentSuccess', (data) => {
