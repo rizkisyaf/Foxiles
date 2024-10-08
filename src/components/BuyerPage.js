@@ -23,7 +23,7 @@ function BuyerPage({ provider }) {
   const [overlayLoading, setOverlayLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [reference, setReference] = useState(null); // Reference for tracking payment
+  const [reference, setReference] = useState(null);
   const [paymentTimeout, setPaymentTimeout] = useState(null);
   const [paymentInterval, setPaymentInterval] = useState(null);
   const [countdown, setCountdown] = useState(PAYMENT_TIMEOUT / 1000);
@@ -96,7 +96,7 @@ function BuyerPage({ provider }) {
     } finally {
       setOverlayLoading(false);
       setShowCryptoModal(false);
-      setReference(null); // Clear the reference after payment
+      setReference(null);
       setSelectedFile(null);
       clearTimeout(paymentTimeout);
       clearInterval(paymentInterval);
@@ -116,7 +116,7 @@ function BuyerPage({ provider }) {
           const confirmedTransaction = await findReference(connection, reference);
           if (confirmedTransaction) {
             setStatus("Payment received...");
-            handlePaymentConfirmed(); // Call the payment confirmed handler
+            handlePaymentConfirmed();
           }
         } catch (error) {
           if (error.message !== 'not found') {
@@ -141,22 +141,27 @@ function BuyerPage({ provider }) {
 
   // Handle the "Buy with Crypto" button click
   const handleBuyFileWithCrypto = (file) => {
-    if (!reference || selectedFile !== file) {
-      const newReference = Keypair.generate().publicKey; // Generate a new reference
-      setReference(newReference); // Set the reference
-    }
+    const newReference = Keypair.generate().publicKey;
+    setReference(newReference); // Set the reference
 
     setSelectedFile(file);
     setShowCryptoModal(true);
     setStatus("Please complete the payment to receive the file.");
     setCountdown(PAYMENT_TIMEOUT / 1000);
 
-    // Create the Solana Pay QR Code
+    // Create the Solana Pay QR Code after reference is set
+    // Use useEffect to wait for reference to be set before generating the QR code
+  };
+
+  // Effect to generate QR after reference is set
+  useEffect(() => {
+    if (!reference || !selectedFile) return;
+
     const recipient = new PublicKey(influencerId);
-    const priceInSOL = parseFloat(file.price);
+    const priceInSOL = parseFloat(selectedFile.price);
 
     if (isNaN(priceInSOL) || priceInSOL <= 0) {
-      console.error("Invalid price for selected file:", file.price);
+      console.error("Invalid price for selected file:", selectedFile.price);
       setStatus("Invalid price for the selected file. Please try again.");
       return;
     }
@@ -177,9 +182,20 @@ function BuyerPage({ provider }) {
       qr.append(qrCodeElement); // Append the newly generated QR code
     }
 
-    // Start payment listening when modal is opened
+    // Start payment listening after generating the QR code
     startPaymentListening();
-  };
+  }, [reference, selectedFile, influencerId, startPaymentListening]);
+
+  // Effect for countdown timer
+  useEffect(() => {
+    if (showCryptoModal && countdown > 0) {
+      const countdownInterval = setInterval(() => {
+        setCountdown((prevCountdown) => prevCountdown - 1);
+      }, 1000);
+
+      return () => clearInterval(countdownInterval);
+    }
+  }, [showCryptoModal, countdown]);
 
   const paginatedFiles = files.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
