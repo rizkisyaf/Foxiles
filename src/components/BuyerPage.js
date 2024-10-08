@@ -145,7 +145,8 @@ function BuyerPage({ provider, walletServicesPlugin }) {
         const response = await walletServicesPlugin.getTransactionSignature();
         if (response && response.signature) {
           setTransactionSignature(response.signature);
-          verifyPayment(); // Automatically verify the payment once the signature is retrieved
+          console.log("Transaction signature retrieved:", response.signature);
+          verifyPayment(response.signature);
         } else {
           throw new Error(
             "No signature retrieved. Please make sure the payment is completed."
@@ -161,39 +162,47 @@ function BuyerPage({ provider, walletServicesPlugin }) {
   };
 
   // Handle verifying the payment by sending the signature to backend
-  const verifyPayment = async () => {
-    if (!transactionSignature) {
+  const verifyPayment = async (signature) => {
+    if (!signature) {
       setStatus("Transaction signature is required for verification.");
       return;
     }
 
     try {
       setStatus("Verifying payment...");
-      const response = await fetch("/.netlify/functions/checkPayment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          receiver: influencerId,
-          amount: selectedFile.price,
-          memo: uniqueMemo,
-          signature: transactionSignature, // Use automatically retrieved signature here
-        }),
-      });
+      console.log("Sending request to checkPayment function...");
 
+      const response = await fetch(
+        "https://foxiles.netlify.app/.netlify/functions/checkPayment",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            receiver: influencerId,
+            amount: selectedFile.price,
+            memo: uniqueMemo,
+            signature: signature,
+          }),
+        }
+      );
+
+      console.log("CheckPayment request sent. Awaiting response...");
       const data = await response.json();
+      console.log("Response from checkPayment:", data);
 
       if (response.status === 200) {
         setStatus("Payment verified successfully.");
         handlePaymentConfirmed(); // Call payment confirmation handler
       } else {
+        console.log("Verification failed with status:", response.status);
         setStatus("Verification failed: " + data.message);
 
         if (retryCount < 3) {
           console.log(`Retrying verification... attempt ${retryCount + 1}`);
           setRetryCount((prev) => prev + 1);
-          verifyPayment();
+          verifyPayment(signature);
         } else {
           console.log("Maximum retry attempts reached. Verification failed.");
         }
@@ -201,11 +210,11 @@ function BuyerPage({ provider, walletServicesPlugin }) {
     } catch (error) {
       console.error("Error during payment verification:", error);
       setStatus("Error during verification. Please try again.");
-      
+
       if (retryCount < 3) {
         console.log(`Retrying verification... attempt ${retryCount + 1}`);
         setRetryCount((prev) => prev + 1);
-        verifyPayment();
+        verifyPayment(signature);
       } else {
         console.log("Maximum retry attempts reached. Verification failed.");
       }

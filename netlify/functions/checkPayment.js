@@ -3,7 +3,12 @@ import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 export async function handler(event, context) {
   try {
     const { receiver, amount, memo, signature } = JSON.parse(event.body);
-    console.log("Received checkPayment request:", { receiver, amount, memo, signature });
+    console.log("Received checkPayment request:", {
+      receiver,
+      amount,
+      memo,
+      signature,
+    });
 
     if (!signature) {
       return {
@@ -45,7 +50,7 @@ export async function handler(event, context) {
           parsedInfo.destination === receiver &&
           parseFloat(parsedInfo.lamports) ===
             parseFloat(amount) * LAMPORTS_PER_SOL &&
-            (!memo || parsedInfo.memo === memo)
+          (!memo || parsedInfo.memo === memo)
         ) {
           paymentVerified = true;
           break;
@@ -57,6 +62,10 @@ export async function handler(event, context) {
       console.log("Payment verified successfully:", signature);
       return {
         statusCode: 200,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "Content-Type",
+        },
         body: JSON.stringify({ message: "Payment verified", signature }),
       };
     } else {
