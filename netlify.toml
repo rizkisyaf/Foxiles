@@ -4,7 +4,7 @@
 
 [functions]
   directory = "netlify/functions"
-  node_bundler = "zip-it-and-ship-it"
+  node_bundler = "zisi"
 
 [[redirects]]
   from = "/functions/*"
