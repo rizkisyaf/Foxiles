@@ -1,18 +1,16 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { LAMPORTS_PER_SOL, PublicKey, Connection } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL, PublicKey, Connection, Keypair } from "@solana/web3.js";
 import { Oval } from "react-loader-spinner";
 import { motion } from "framer-motion";
 import { fetchUploaderFiles } from "../utils/UploaderService";
 import { decryptFile, fetchEncryptedFileData } from "../utils/drmservice";
-import { createQR, encodeURL } from "@solana/pay";
+import { createQR, encodeURL, findReference } from "@solana/pay";
 import logo from "../assets/2.png";
-import { v4 as uuidv4 } from "uuid";
 import BigNumber from "bignumber.js";
 import "./BuyerPage.css";
 
 const ITEMS_PER_PAGE = 8;
-const PAYMENT_CHECK_INTERVAL = 5000; // 5 seconds
 const PAYMENT_TIMEOUT = 180000; // 180 seconds
 
 function BuyerPage({ provider }) {
@@ -25,13 +23,14 @@ function BuyerPage({ provider }) {
   const [overlayLoading, setOverlayLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [uniqueMemo, setUniqueMemo] = useState(null);
+  const [reference, setReference] = useState(null); // Reference for tracking payment
   const [paymentTimeout, setPaymentTimeout] = useState(null);
   const [paymentInterval, setPaymentInterval] = useState(null);
   const [countdown, setCountdown] = useState(PAYMENT_TIMEOUT / 1000);
 
   const connection = new Connection("https://api.devnet.solana.com");
 
+  // Fetch the uploader's files metadata
   const fetchUploaderFilesMetadata = useCallback(async () => {
     setLoading(true);
     setStatus("Fetching uploader's files...");
@@ -61,6 +60,7 @@ function BuyerPage({ provider }) {
     fetchUploaderFilesMetadata();
   }, [fetchUploaderFilesMetadata]);
 
+  // Handle payment confirmation and file decryption
   const handlePaymentConfirmed = useCallback(async () => {
     setStatus("Payment confirmed. Preparing your file for decryption...");
     setOverlayLoading(true);
@@ -96,111 +96,90 @@ function BuyerPage({ provider }) {
     } finally {
       setOverlayLoading(false);
       setShowCryptoModal(false);
-      setUniqueMemo(null);
+      setReference(null); // Clear the reference after payment
       setSelectedFile(null);
       clearTimeout(paymentTimeout);
       clearInterval(paymentInterval);
     }
   }, [selectedFile, paymentTimeout, paymentInterval]);
 
-  useEffect(() => {
-    if (showCryptoModal && uniqueMemo) {
-      setStatus("Waiting for your payment...");
+  // Start listening for the payment using the reference
+  const startPaymentListening = useCallback(async () => {
+    if (!reference) return;
 
-      const startPaymentProcess = async () => {
+    setStatus("Waiting for your payment...");
+
+    try {
+      const interval = setInterval(async () => {
         try {
-          // Fetch the latest blockhash when the modal appears
-          const { blockhash: latestBlockhash } =
-            await connection.getLatestBlockhash();
-
-          const interval = setInterval(async () => {
-            try {
-              // Fetch signatures only after the latest blockhash
-              const confirmedSignatures =
-                await connection.getSignaturesForAddress(
-                  new PublicKey(influencerId),
-                  {
-                    limit: 10,
-                    before: latestBlockhash, // Limit to signatures after the blockhash
-                  }
-                );
-
-              // Check for the payment with the unique memo
-              const payment = confirmedSignatures.find(
-                (signatureInfo) => signatureInfo.memo === uniqueMemo
-              );
-
-              if (payment) {
-                setStatus("Payment received...");
-                handlePaymentConfirmed(); // Call the payment confirmed handler
-              }
-            } catch (error) {
-              console.error("Error checking payment status:", error);
-            }
-          }, PAYMENT_CHECK_INTERVAL);
-
-          const timeout = setTimeout(() => {
-            clearInterval(interval);
-            setShowCryptoModal(false);
-            setStatus(
-              "Payment not completed within the time limit. Please try again."
-            );
-          }, PAYMENT_TIMEOUT);
-
-          setPaymentInterval(interval);
-          setPaymentTimeout(timeout);
-
-          const countdownInterval = setInterval(() => {
-            setCountdown((prevCountdown) => {
-              if (prevCountdown <= 1) {
-                clearInterval(countdownInterval);
-                return 0;
-              }
-              return prevCountdown - 1;
-            });
-          }, 1000);
-
-          return () => {
-            clearInterval(interval);
-            clearTimeout(timeout);
-            clearInterval(countdownInterval);
-          };
+          // Use findReference to search for the transaction with the reference
+          const confirmedTransaction = await findReference(connection, reference);
+          if (confirmedTransaction) {
+            setStatus("Payment received...");
+            handlePaymentConfirmed(); // Call the payment confirmed handler
+          }
         } catch (error) {
-          console.error("Error starting payment process:", error);
-          setStatus("Error initializing the payment. Please try again.");
+          if (error.message !== 'not found') {
+            console.error("Error checking payment status:", error);
+          }
         }
-      };
+      }, 1000); // Poll every second
 
-      startPaymentProcess();
+      const timeout = setTimeout(() => {
+        clearInterval(interval);
+        setShowCryptoModal(false);
+        setStatus("Payment not completed within the time limit. Please try again.");
+      }, PAYMENT_TIMEOUT);
+
+      setPaymentInterval(interval);
+      setPaymentTimeout(timeout);
+    } catch (error) {
+      console.error("Error starting payment process:", error);
+      setStatus("Error initializing the payment. Please try again.");
     }
-  }, [showCryptoModal, uniqueMemo, handlePaymentConfirmed, connection]);
+  }, [reference, connection, handlePaymentConfirmed]);
 
-  useEffect(() => {
-    if (showCryptoModal && selectedFile && uniqueMemo) {
-      const recipient = new PublicKey(influencerId);
-      let priceInSOL = parseFloat(selectedFile.price);
-
-      if (isNaN(priceInSOL) || priceInSOL <= 0) {
-        console.error("Invalid price for selected file:", selectedFile.price);
-        setStatus("Invalid price for the selected file. Please try again.");
-        return;
-      }
-      console.log("Selected file price in SOL for QR code:", priceInSOL);
-
-      const url = encodeURL({
-        recipient,
-        amount: new BigNumber(priceInSOL),
-        memo: uniqueMemo,
-      });
-
-      const qr = createQR(url, 200, "transparent");
-      const qrCodeElement = document.getElementById("solana-payment-qr");
-      if (qrCodeElement) {
-        qrCodeElement.innerHTML = "";
-        qr.append(qrCodeElement);
-      }
+  // Handle the "Buy with Crypto" button click
+  const handleBuyFileWithCrypto = (file) => {
+    if (!reference || selectedFile !== file) {
+      const newReference = Keypair.generate().publicKey; // Generate a new reference
+      setReference(newReference); // Set the reference
     }
-  }, [showCryptoModal, selectedFile, uniqueMemo, influencerId]);
+
+    setSelectedFile(file);
+    setShowCryptoModal(true);
+    setStatus("Please complete the payment to receive the file.");
+    setCountdown(PAYMENT_TIMEOUT / 1000);
+
+    // Create the Solana Pay QR Code
+    const recipient = new PublicKey(influencerId);
+    const priceInSOL = parseFloat(file.price);
+
+    if (isNaN(priceInSOL) || priceInSOL <= 0) {
+      console.error("Invalid price for selected file:", file.price);
+      setStatus("Invalid price for the selected file. Please try again.");
+      return;
+    }
+
+    // Generate Solana Pay URL with recipient, amount, and reference
+    const url = encodeURL({
+      recipient,
+      amount: new BigNumber(priceInSOL),
+      reference, // Add the reference to track the transaction
+    });
+
+    const qr = createQR(url, 200, "transparent"); // Create QR with a size of 200px
+
+    // Append the QR code to the DOM
+    const qrCodeElement = document.getElementById("solana-payment-qr");
+    if (qrCodeElement) {
+      qrCodeElement.innerHTML = ""; // Clear any previous QR code
+      qr.append(qrCodeElement); // Append the newly generated QR code
+    }
+
+    // Start payment listening when modal is opened
+    startPaymentListening();
+  };
 
   const paginatedFiles = files.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
@@ -217,18 +196,6 @@ function BuyerPage({ provider }) {
     if (currentPage > 1) {
       setCurrentPage(currentPage - 1);
     }
-  };
-
-  const handleBuyFileWithCrypto = (file) => {
-    if (!uniqueMemo || selectedFile !== file) {
-      const newMemo = uuidv4();
-      setUniqueMemo(newMemo);
-    }
-
-    setSelectedFile(file);
-    setShowCryptoModal(true);
-    setStatus("Please complete the payment to receive the file.");
-    setCountdown(PAYMENT_TIMEOUT / 1000);
   };
 
   return (
@@ -300,7 +267,7 @@ function BuyerPage({ provider }) {
               Next
             </button>
           </div>
-          {showCryptoModal && selectedFile && uniqueMemo && (
+          {showCryptoModal && selectedFile && reference && (
             <div className="crypto-modal">
               <div className="buyer-modal-content">
                 <h4>Payment Instructions</h4>
