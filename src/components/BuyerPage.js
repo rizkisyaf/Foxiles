@@ -105,51 +105,73 @@ function BuyerPage({ provider }) {
 
   useEffect(() => {
     if (showCryptoModal && uniqueMemo) {
-      const interval = setInterval(async () => {
+      setStatus("Waiting for your payment...");
+
+      const startPaymentProcess = async () => {
         try {
-          const confirmedSignatures = await connection.getSignaturesForAddress(
-            new PublicKey(influencerId),
-            {
-              limit: 10,
+          // Fetch the latest blockhash when the modal appears
+          const { blockhash: latestBlockhash } =
+            await connection.getLatestBlockhash();
+
+          const interval = setInterval(async () => {
+            try {
+              // Fetch signatures only after the latest blockhash
+              const confirmedSignatures =
+                await connection.getSignaturesForAddress(
+                  new PublicKey(influencerId),
+                  {
+                    limit: 10,
+                    before: latestBlockhash, // Limit to signatures after the blockhash
+                  }
+                );
+
+              // Check for the payment with the unique memo
+              const payment = confirmedSignatures.find(
+                (signatureInfo) => signatureInfo.memo === uniqueMemo
+              );
+
+              if (payment) {
+                setStatus("Payment received...");
+                handlePaymentConfirmed(); // Call the payment confirmed handler
+              }
+            } catch (error) {
+              console.error("Error checking payment status:", error);
             }
-          );
+          }, PAYMENT_CHECK_INTERVAL);
 
-          const payment = confirmedSignatures.find((signatureInfo) =>
-            signatureInfo.memo === uniqueMemo
-          );
+          const timeout = setTimeout(() => {
+            clearInterval(interval);
+            setShowCryptoModal(false);
+            setStatus(
+              "Payment not completed within the time limit. Please try again."
+            );
+          }, PAYMENT_TIMEOUT);
 
-          if (payment) {
-            handlePaymentConfirmed();
-          }
-        } catch (error) {
-          console.error("Error checking payment status:", error);
-        }
-      }, PAYMENT_CHECK_INTERVAL);
+          setPaymentInterval(interval);
+          setPaymentTimeout(timeout);
 
-      const timeout = setTimeout(() => {
-        clearInterval(interval);
-        setShowCryptoModal(false);
-        setStatus("Payment not completed within the time limit. Please try again.");
-      }, PAYMENT_TIMEOUT);
+          const countdownInterval = setInterval(() => {
+            setCountdown((prevCountdown) => {
+              if (prevCountdown <= 1) {
+                clearInterval(countdownInterval);
+                return 0;
+              }
+              return prevCountdown - 1;
+            });
+          }, 1000);
 
-      setPaymentInterval(interval);
-      setPaymentTimeout(timeout);
-
-      const countdownInterval = setInterval(() => {
-        setCountdown((prevCountdown) => {
-          if (prevCountdown <= 1) {
+          return () => {
+            clearInterval(interval);
+            clearTimeout(timeout);
             clearInterval(countdownInterval);
-            return 0;
-          }
-          return prevCountdown - 1;
-        });
-      }, 1000);
-
-      return () => {
-        clearInterval(interval);
-        clearTimeout(timeout);
-        clearInterval(countdownInterval);
+          };
+        } catch (error) {
+          console.error("Error starting payment process:", error);
+          setStatus("Error initializing the payment. Please try again.");
+        }
       };
+
+      startPaymentProcess();
     }
   }, [showCryptoModal, uniqueMemo, handlePaymentConfirmed, connection]);
 
