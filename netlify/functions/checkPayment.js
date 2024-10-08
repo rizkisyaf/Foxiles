@@ -1,57 +1,69 @@
-import { io } from 'socket.io-client';
+import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 export async function handler(event, context) {
-  return new Promise((resolve, reject) => {
-    // Establish a connection to the Socket.IO server
-    const socket = io('wss://ws.foxiles.xyz', {
-      transports: ['websocket'],
-      reconnection: true,
-    });
+  try {
+    const { receiver, amount, memo, signature } = JSON.parse(event.body);
 
-    socket.on('connect', () => {
-      // Parsing incoming request data
-      const { receiver, amount, memo } = JSON.parse(event.body);
+    if (!signature) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: "Transaction signature is required" }),
+      };
+    }
 
-      // Send payment details to the Socket.IO server
-      socket.emit("checkPayment", { receiver, amount, memo }, (ack) => {
-        console.log("Server acknowledged the request:", ack);
-      });
-    }); // <-- This closing bracket was missing
+    const connection = new Connection("https://api.devnet.solana.com");
 
-    // Handle payment success
-    socket.on('paymentSuccess', (data) => {
-      resolve({
-        statusCode: 200,
-        body: JSON.stringify({ message: 'Payment found', signature: data.signature })
-      });
-      socket.disconnect();
-    });
+    // Fetch the transaction using the signature
+    const transactionDetails = await connection.getParsedTransaction(
+      signature,
+      {
+        commitment: "finalized",
+      }
+    );
 
-    // Handle payment not found
-    socket.on('paymentNotFound', () => {
-      resolve({
+    if (!transactionDetails) {
+      return {
         statusCode: 404,
-        body: JSON.stringify({ message: 'Payment not found' })
-      });
-      socket.disconnect();
-    });
+        body: JSON.stringify({ message: "Transaction not found" }),
+      };
+    }
 
-    // Handle payment error
-    socket.on('paymentError', (data) => {
-      resolve({
-        statusCode: 500,
-        body: JSON.stringify({ message: 'Error', error: data.message })
-      });
-      socket.disconnect();
-    });
+    // Verify transaction details
+    const instructions = transactionDetails.transaction.message.instructions;
+    let paymentVerified = false;
 
-    // Handle connection error
-    socket.on('connect_error', (error) => {
-      reject({
-        statusCode: 500,
-        body: JSON.stringify({ message: 'WebSocket Error', error: error.message })
-      });
-      socket.disconnect();
-    });
-  });
+    for (const instruction of instructions) {
+      // Check if the instruction is of type `ParsedInstruction`
+      if ("parsed" in instruction) {
+        const parsedInfo = instruction.parsed.info;
+
+        if (
+          parsedInfo.destination === receiver &&
+          parseFloat(parsedInfo.lamports) ===
+            parseFloat(amount) * LAMPORTS_PER_SOL &&
+          parsedInfo.memo === memo
+        ) {
+          paymentVerified = true;
+          break;
+        }
+      }
+    }
+
+    if (paymentVerified) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: "Payment verified", signature }),
+      };
+    } else {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: "Payment details do not match" }),
+      };
+    }
+  } catch (error) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ message: "Server error", error: error.message }),
+    };
+  }
 }

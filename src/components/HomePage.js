@@ -10,7 +10,6 @@ import {
 } from "@solana/web3.js";
 import {
   validateInput,
-  getConnection,
   prepareInstructionData,
 } from "../utils/registerService";
 import { motion } from "framer-motion";
@@ -19,9 +18,9 @@ import { Oval } from "react-loader-spinner";
 import { initializePlatformState } from "../utils/PlatformService";
 import "./HomePage.css";
 import { SolanaWallet } from "@web3auth/solana-provider";
-import { FileRegistration } from "../utils/types";
 import { sha256 } from "js-sha256";
 import { QRCodeCanvas } from "qrcode.react";
+import { createQR, encodeURL } from "@solana/pay";
 import logo from "../assets/2.png";
 import fox from "../assets/foxlogo.png";
 import {
@@ -32,6 +31,7 @@ import {
   FaFileAlt,
 } from "react-icons/fa";
 import { BsTwitterX } from "react-icons/bs";
+import BigNumber from "bignumber.js";
 
 const programID = new PublicKey(`${process.env.REACT_APP_PROGRAM_ID}`);
 
@@ -54,6 +54,7 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
   const [platformFee, setPlatformFee] = useState(0.01);
   const [showTopUpModal, setShowTopUpModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [topUpAmount, setTopUpAmount] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -192,18 +193,15 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
       const processedFileBuffer = Buffer.from(processedFile, "base64");
 
       // Step 3: Upload processed file to Pinata
-      const uploadResponse = await fetch(
-        "/.netlify/functions/uploadToPinata",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            fileBuffer: processedFileBuffer.toString("base64"),
-          }),
-        }
-      );
+      const uploadResponse = await fetch("/.netlify/functions/uploadToPinata", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fileBuffer: processedFileBuffer.toString("base64"),
+        }),
+      });
 
       const uploadData = await uploadResponse.json();
       const cid = uploadData?.cid;
@@ -387,7 +385,36 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
   };
 
   const handleTopUp = () => {
+    const recipient = new PublicKey(walletPublicKey);
+    const amount = new BigNumber(topUpAmount);
+
+    if (amount.isNaN() || amount.lte(0)) {
+      alert("Please enter a valid amount.");
+      return;
+    }
+
+    const url = encodeURL({
+      recipient,
+      amount: amount,
+    });
+
+    const qr = createQR(url, 200, "transparent");
+    const qrCodeElement = document.getElementById("solana-top-up-qr");
+    qrCodeElement.innerHTML = "";
+    qr.append(qrCodeElement);
+
     setShowTopUpModal(true);
+  };
+
+  const copyToClipboard = () => {
+    navigator.clipboard
+      .writeText(walletPublicKey)
+      .then(() => {
+        alert("Wallet address copied to clipboard!");
+      })
+      .catch((err) => {
+        console.error("Could not copy text: ", err);
+      });
   };
 
   const handleFiatPayment = async () => {
@@ -408,17 +435,6 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
       setStatusColor("red");
       setStatus("Error during fiat payment. Please try again.");
     }
-  };
-
-  const copyToClipboard = () => {
-    navigator.clipboard
-      .writeText(walletPublicKey)
-      .then(() => {
-        alert("Wallet address copied to clipboard!");
-      })
-      .catch((err) => {
-        console.error("Could not copy text: ", err);
-      });
   };
 
   return (
@@ -461,21 +477,28 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
         <div className="topup-modal">
           <div className="modal-content">
             <h3>Fund Your Wallet</h3>
-            <p>
-              To proceed with uploading, please fund your wallet. You can use
-              the QR code or wallet address below to deposit SOL.
-            </p>
-            <QRCodeCanvas
-              value={`solana:${walletPublicKey}?amount=1`}
-              size={200}
+            <p>To proceed with uploading, please fund your wallet.</p>
+
+            {/* Input for User to Enter Top-Up Amount */}
+            <input
+              type="number"
+              value={topUpAmount}
+              onChange={(e) => setTopUpAmount(e.target.value)}
+              placeholder="Enter amount in SOL"
+              className="input-field"
             />
+
+            {/* Render the Solana Pay QR Code */}
+            <div id="solana-top-up-qr"></div>
+
             <p className="wallet-address-full">
-              {walletPublicKey}{" "}
+              {walletPublicKey}
               <FaClipboard
                 onClick={copyToClipboard}
                 style={{ cursor: "pointer", marginLeft: "10px" }}
               />
             </p>
+
             <button
               onClick={() => setShowTopUpModal(false)}
               className="dashboard-button"
