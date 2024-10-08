@@ -38,7 +38,7 @@ export const fetchEncryptedFileData = async (fileCid) => {
     console.log(`Fetching file data for CID: ${fileCid}`); // Debugging log
 
     const response = await fetch(
-      "/.netlify/functions/fetchEncryptedFile/:fileCid"
+      `/.netlify/functions/fetchEncryptedFile/${fileCid}`
     );
 
     if (!response.ok) {
