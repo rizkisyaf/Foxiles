@@ -173,7 +173,7 @@ function BuyerPage({ provider, walletServicesPlugin }) {
       console.log("Sending request to checkPayment function...");
 
       const response = await fetch(
-        "https://foxiles.netlify.app/.netlify/functions/checkPayment",
+        "https://foxiles.xyz/.netlify/functions/checkPayment",
         {
           method: "POST",
           headers: {
