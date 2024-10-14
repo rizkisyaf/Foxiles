@@ -1,34 +1,66 @@
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
-import './LandingPage.css';
-import { FaFacebook, FaInstagram, FaLinkedin } from 'react-icons/fa';
-import { BsTwitterX, BsIncognito, BsPaletteFill, BsCameraReelsFill, BsFillEasel2Fill, BsBriefcaseFill, BsCodeSquare, BsEyedropper, BsNewspaper, BsFillFolderFill, BsShieldFillCheck, BsCameraFill, BsStars } from "react-icons/bs";
-import logo from '../assets/2.png';
-import hero from '../assets/hero.png';
-import why from '../assets/why.png';
-import creator from '../assets/creator.png';
-import f1 from '../assets/f1.png';
-import f2 from '../assets/f2.png';
-import f3 from '../assets/f3.png';
-import f4 from '../assets/f4.png';
+import React from "react";
+import { motion } from "framer-motion";
+import { Link, useNavigate } from "react-router-dom";
+import "./LandingPage.css";
+import { FaFacebook, FaInstagram, FaLinkedin } from "react-icons/fa";
+import {
+  BsTwitterX,
+  BsIncognito,
+  BsPaletteFill,
+  BsCameraReelsFill,
+  BsFillEasel2Fill,
+  BsBriefcaseFill,
+  BsCodeSquare,
+  BsEyedropper,
+  BsNewspaper,
+  BsFillFolderFill,
+  BsShieldFillCheck,
+  BsCameraFill,
+  BsStars,
+} from "react-icons/bs";
+import logo from "../assets/2.png";
+import hero from "../assets/hero.png";
+import why from "../assets/why.png";
+import creator from "../assets/creator.png";
+import f1 from "../assets/f1.png";
+import f2 from "../assets/f2.png";
+import f3 from "../assets/f3.png";
+import f4 from "../assets/f4.png";
 
-const LandingPage = () => {
+const LandingPage = ({ onCreateNoLogin }) => {
+  const navigate = useNavigate();
   // Array for "who" section
   const who = [
-    { icon: <BsIncognito />, title: 'Whistleblowers' },
-    { icon: <BsPaletteFill />, title: 'Creative Professionals Selling Digital Art' },
-    { icon: <BsCameraReelsFill />, title: 'Exclusive Video or Audio Content' },
-    { icon: <BsFillEasel2Fill />, title: 'Educational Content' },
-    { icon: <BsBriefcaseFill />, title: 'Confidential Business Document Sharing' },
-    { icon: <BsEyedropper />, title: 'Scientific Research and Academic Papers' },
-    { icon: <BsCodeSquare />, title: 'Independent Software Developers' },
-    { icon: <BsNewspaper />, title: 'Journalists and Media' },
-    { icon: <BsFillFolderFill />, title: 'Legal Document Sharing' },
-    { icon: <BsShieldFillCheck />, title: 'Secretive Information Exchanges' },
-    { icon: <BsCameraFill />, title: 'Specialized Photography and Videography' },
-    { icon: <BsStars />, title: 'Celebrity or Influencer Exclusive Content' },
+    { icon: <BsIncognito />, title: "Whistleblowers" },
+    {
+      icon: <BsPaletteFill />,
+      title: "Creative Professionals Selling Digital Art",
+    },
+    { icon: <BsCameraReelsFill />, title: "Exclusive Video or Audio Content" },
+    { icon: <BsFillEasel2Fill />, title: "Educational Content" },
+    {
+      icon: <BsBriefcaseFill />,
+      title: "Confidential Business Document Sharing",
+    },
+    {
+      icon: <BsEyedropper />,
+      title: "Scientific Research and Academic Papers",
+    },
+    { icon: <BsCodeSquare />, title: "Independent Software Developers" },
+    { icon: <BsNewspaper />, title: "Journalists and Media" },
+    { icon: <BsFillFolderFill />, title: "Legal Document Sharing" },
+    { icon: <BsShieldFillCheck />, title: "Secretive Information Exchanges" },
+    {
+      icon: <BsCameraFill />,
+      title: "Specialized Photography and Videography",
+    },
+    { icon: <BsStars />, title: "Celebrity or Influencer Exclusive Content" },
   ];
+
+  const handleNoLoginButtonClick = () => {
+    onCreateNoLogin();
+    navigate("/dashboard");
+  };
 
   return (
     <div className="landing-container">
@@ -50,7 +82,7 @@ const LandingPage = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 1 }}
             >
-              Anonymous, Decentralized platform for digital content monetization.
+              Organize, Label, and Securely Share Your Documents, Hassle-Free.
             </motion.h1>
 
             <motion.p
@@ -59,16 +91,37 @@ const LandingPage = () => {
               animate={{ opacity: 0.6, y: 0 }}
               transition={{ duration: 1.2 }}
             >
-              Experience seamless blockchain transactions, <br />robust DRM protection, and flexsible payment options.
+              Imagine a file-sharing solution that automatically organizes,
+              labels, and indexes your documents, <br />
+              providing top-tier security and monetization options—without the
+              hassle of login.
             </motion.p>
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 1.5, type: 'spring', stiffness: 100 }}
+              transition={{ delay: 1.5, type: "spring", stiffness: 100 }}
             >
               <Link to="/login" className="cta-button">
-                Start Selling Now
+                Log Me In
               </Link>
+            </motion.div>
+            {/* No-login account button */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 1.7, type: "spring", stiffness: 100 }}
+              style={{ marginTop: "20px" }}
+            >
+              <button
+                onClick={handleNoLoginButtonClick}
+                className="cta-button no-login-button"
+              >
+                Start as Guest
+              </button>
+              <p>
+                No account needed. Upload and share privately with our no-login
+                feature.
+              </p>
             </motion.div>
           </div>
           <div className="image-column">
@@ -105,10 +158,16 @@ const LandingPage = () => {
           >
             <h2>Why Foxiles?</h2>
             <p>
-              At Foxiles, we believe in empowering creators by giving them full control over their digital assets.
-              Whether you're a developer, artist, educator, or entrepreneur, Foxiles offers a seamless, wallet-free
-              onboarding experience with decentralized identity (DID), allowing you to sell your creations with
-              complete anonymity and security.
+              Foxiles eliminates the complexity of file-sharing. No login
+              required—just upload, organize, and share your files with ease.
+              Automatically index your documents and gain peace of mind with
+              robust security and monetization options built-in.
+            </p>
+            <p>
+              Whether you're a content creator, business professional, or simply
+              someone who values privacy, Foxiles makes it easy to secure and
+              monetize your digital assets, all without any of the usual
+              barriers.
             </p>
           </motion.div>
         </div>
@@ -132,45 +191,43 @@ const LandingPage = () => {
 
       {/* Section 4: Key Features */}
       <section className="features-section">
-        <div className="overview-text"><h2>Our Features</h2></div>
+        <div className="overview-text">
+          <h2>Our Features</h2>
+        </div>
         <motion.div className="feature-card" whileHover={{ scale: 1.05 }}>
-          <img
-            src={f1}
-            alt="Maximize Revenue"
-            className="feature-icon"
-          />
-          <h3>Maximize Revenue</h3>
-          <p>Earn 90% of every sale, no hidden fees or intermediaries.</p>
+          <img src={f1} alt="Maximize Revenue" className="feature-icon" />
+          <h3>Automatic Document Organization</h3>
+          <p>
+            Foxiles automatically organizes your files, making it easy to find
+            and manage your documents.
+          </p>
         </motion.div>
 
         <motion.div className="feature-card" whileHover={{ scale: 1.05 }}>
-          <img
-            src={f3}
-            alt="Fast Payments"
-            className="feature-icon"
-          />
-          <h3>Instant Payments</h3>
-          <p>Receive instant payments directly into your non-custodial wallet.</p>
+          <img src={f3} alt="Fast Payments" className="feature-icon" />
+          <h3>Monetization Without Barriers</h3>
+          <p>
+            Monetize your content seamlessly, with instant payments and no
+            hidden fees.
+          </p>
         </motion.div>
 
         <motion.div className="feature-card" whileHover={{ scale: 1.05 }}>
-          <img
-            src={f2}
-            alt="Blockchain Security"
-            className="feature-icon"
-          />
-          <h3>Blockchain Security</h3>
-          <p>Your assets are securely stored on-chain, fully protected from piracy.</p>
+          <img src={f2} alt="Blockchain Security" className="feature-icon" />
+          <h3>Top-Tier Security</h3>
+          <p>
+            Your files are protected by blockchain security, ensuring that your
+            data is safe from unauthorized access.
+          </p>
         </motion.div>
 
         <motion.div className="feature-card" whileHover={{ scale: 1.05 }}>
-          <img
-            src={f4}
-            alt="Decentralized Identity"
-            className="feature-icon"
-          />
+          <img src={f4} alt="Decentralized Identity" className="feature-icon" />
           <h3>Decentralized Identity</h3>
-          <p>Your identity is protected through DID, ensuring privacy and security.</p>
+          <p>
+            Your identity is protected through DID, ensuring privacy and
+            security.
+          </p>
         </motion.div>
       </section>
 
@@ -185,10 +242,12 @@ const LandingPage = () => {
           >
             <h2>For Creators, By Creators</h2>
             <p>
-              Foxiles is built by creators, for creators. Whether you’re an artist looking to protect your
-              intellectual property or a developer wanting to sell your code, we’ve created a platform where
-              your creations are safe, your identity is protected, and your earnings go directly to you—without
-              the need for intermediaries or wallets.
+              Foxiles is built by creators, for creators. Whether you’re an
+              artist looking to protect your intellectual property or a
+              developer wanting to sell your code, we’ve created a platform
+              where your creations are safe, your identity is protected, and
+              your earnings go directly to you—without the need for
+              intermediaries or wallets.
             </p>
           </motion.div>
         </div>
@@ -212,7 +271,7 @@ const LandingPage = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1 }}
         >
-          Ready to Sell Your Digital Content?
+          Ready to Securely Share Your Files?
         </motion.h2>
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
@@ -237,16 +296,36 @@ const LandingPage = () => {
           <img src={logo} alt="Website Logo" className="footer-logo" />
         </div>
         <div className="footer-right">
-          <a href="https://facebook.com" target="_blank" rel="noreferrer" aria-label="Facebook">
+          <a
+            href="https://facebook.com"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Facebook"
+          >
             <FaFacebook className="social-icon" />
           </a>
-          <a href="https://twitter.com" target="_blank" rel="noreferrer" aria-label="Twitter">
+          <a
+            href="https://twitter.com"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Twitter"
+          >
             <BsTwitterX className="social-icon" />
           </a>
-          <a href="https://instagram.com" target="_blank" rel="noreferrer" aria-label="Instagram">
+          <a
+            href="https://instagram.com"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Instagram"
+          >
             <FaInstagram className="social-icon" />
           </a>
-          <a href="https://linkedin.com" target="_blank" rel="noreferrer" aria-label="LinkedIn">
+          <a
+            href="https://linkedin.com"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="LinkedIn"
+          >
             <FaLinkedin className="social-icon" />
           </a>
         </div>

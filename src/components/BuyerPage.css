@@ -79,10 +79,15 @@
   z-index: 9999;
 }
 
+.crypto-modal p {
+  color: #333;
+}
+
 .buyer-modal-content {
   display: flex;
   flex-direction: column;
   align-items: center;
+  color: #333;
 }
 
 .wallet-address-full {

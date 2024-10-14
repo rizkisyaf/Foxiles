@@ -1,4 +1,3 @@
-//homepage.js
 import React, { useState, useEffect, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import {
@@ -19,7 +18,7 @@ import { initializePlatformState } from "../utils/PlatformService";
 import "./HomePage.css";
 import { SolanaWallet } from "@web3auth/solana-provider";
 import { sha256 } from "js-sha256";
-import { QRCodeCanvas } from "qrcode.react";
+import { v4 as uuidv4 } from "uuid";
 import { createQR, encodeURL } from "@solana/pay";
 import logo from "../assets/2.png";
 import fox from "../assets/foxlogo.png";
@@ -31,11 +30,23 @@ import {
   FaFileAlt,
 } from "react-icons/fa";
 import { BsTwitterX } from "react-icons/bs";
-import BigNumber from "bignumber.js";
 
 const programID = new PublicKey(`${process.env.REACT_APP_PROGRAM_ID}`);
 
-function HomePage({ provider, walletServicesPlugin, web3auth }) {
+const createSharedDirectory = () => {
+  const directoryId = uuidv4();
+  localStorage.setItem("sharedDirectory", directoryId);
+  return directoryId;
+};
+
+const NO_LOGIN_MAX_SIZE_MB = 5;
+
+function HomePage({
+  provider = null,
+  walletServicesPlugin = null,
+  web3auth = null,
+  noLoginAccount,
+}) {
   const [file, setFile] = useState(null);
   const [fileSizeMB, setFileSizeMB] = useState(0);
   const [fileCid, setFileCid] = useState("");
@@ -43,6 +54,9 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
   const [fileUrl, setFileUrl] = useState("");
   const [fileType, setFileType] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [sharedDirectory, setSharedDirectory] = useState(
+    () => localStorage.getItem("sharedDirectory") || null
+  );
   const [price, setPrice] = useState("");
   const [description, setDescription] = useState("");
   const [walletPublicKey, setWalletPublicKey] = useState(null);
@@ -54,7 +68,6 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
   const [platformFee, setPlatformFee] = useState(0.01);
   const [showTopUpModal, setShowTopUpModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [topUpAmount, setTopUpAmount] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -62,10 +75,6 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
       try {
         const platformStatePubKey = await initializePlatformState();
         setPlatformStatePubKey(platformStatePubKey);
-        console.log(
-          "Fetched Platform State Public Key:",
-          platformStatePubKey.toBase58()
-        );
       } catch (error) {
         console.error("Error fetching platform state:", error);
       }
@@ -83,19 +92,19 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
 
         if (accounts && accounts[0]) {
           setWalletPublicKey(accounts[0]);
-          console.log("Fetched wallet public key:", accounts[0]);
 
-          // Fetch wallet balance
           const connection = new Connection("https://api.devnet.solana.com");
           const balance = await connection.getBalance(
             new PublicKey(accounts[0])
           );
           setWalletBalance(balance / LAMPORTS_PER_SOL);
 
-          // Show top-up modal if balance is zero
           if (balance === 0) {
             setShowTopUpModal(true);
           }
+
+          // Clear any no-login account data from local storage when the user logs in
+          localStorage.removeItem("noLoginAccount");
         } else {
           console.error("No accounts found.");
         }
@@ -107,10 +116,11 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
     if (provider && web3auth) {
       fetchPlatformState();
       fetchWalletDetails();
+    } else if (noLoginAccount && !walletPublicKey) {
+      console.log("Using no-login account:", noLoginAccount);
     }
-  }, [provider, web3auth]);
+  }, [provider, web3auth, noLoginAccount]);
 
-  // Generate QR code for wallet top-up after modal is shown
   useEffect(() => {
     if (showTopUpModal) {
       const recipient = new PublicKey(walletPublicKey);
@@ -129,33 +139,49 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
     navigate("/uploaderdashboard");
   };
 
-  const onDrop = useCallback((acceptedFiles) => {
-    const selectedFile = acceptedFiles[0];
-    const fileSizeMB = parseFloat(
-      (selectedFile.size / (1024 * 1024)).toFixed(2)
-    );
-    const maxSizeMB = 500;
-
-    if (fileSizeMB > maxSizeMB) {
-      alert(
-        `The selected file is too large. Maximum allowed size is ${maxSizeMB} MB.`
+  const onDrop = useCallback(
+    (acceptedFiles) => {
+      const selectedFile = acceptedFiles[0];
+      const fileSizeMB = parseFloat(
+        (selectedFile.size / (1024 * 1024)).toFixed(2)
       );
-      setFile(null);
-      setFileSizeMB(0);
-    } else {
-      setFile(selectedFile);
-      setFileSizeMB(fileSizeMB);
-      setFileName(selectedFile.name);
-      setFileType(selectedFile.type);
-      console.log("File uploaded:", selectedFile);
-    }
-  }, []);
+      const maxSizeMB = noLoginAccount ? NO_LOGIN_MAX_SIZE_MB : 500;
+
+      if (fileSizeMB > maxSizeMB) {
+        alert(
+          `The selected file is too large. Maximum allowed size is ${maxSizeMB} MB.`
+        );
+        setFile(null);
+        setFileSizeMB(0);
+      } else {
+        setFile(selectedFile);
+        setFileSizeMB(fileSizeMB);
+        setFileName(selectedFile.name);
+        setFileType(selectedFile.type);
+      }
+    },
+    [noLoginAccount]
+  );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
       "image/*": [],
       "application/pdf": [],
+      "application/msword": [],
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        [],
+      "application/vnd.ms-excel": [],
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [],
+      "application/vnd.ms-powerpoint": [],
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+        [],
+      "text/plain": [],
+      "application/zip": [],
+      "application/x-7z-compressed": [],
+      "application/x-rar-compressed": [],
+      "video/*": [],
+      "audio/*": [],
     },
     maxFiles: 1,
   });
@@ -171,21 +197,24 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
       return;
     }
 
+    if (noLoginAccount && fileSizeMB > NO_LOGIN_MAX_SIZE_MB) {
+      alert("No-login users can only upload files up to 5MB.");
+      return;
+    }
+
     setLoading(true);
     setStatusColor("");
     setStatus("Processing and uploading file...");
 
     try {
-      // Step 1: Read the file into a buffer
       const fileArrayBuffer = await file.arrayBuffer();
       const fileBuffer = Buffer.from(fileArrayBuffer);
 
-      console.log("File type: ", file.type); // Debug log
-      console.log("File size (bytes): ", file.size); // Debug log
+      const uploaderId = noLoginAccount ? noLoginAccount.id : walletPublicKey;
+      const directoryId = sharedDirectory || createSharedDirectory();
 
       const fileType = file.type;
 
-      // Step 2: Process the file by sending it to the backend
       const processResponse = await fetch("/.netlify/functions/processFile", {
         method: "POST",
         headers: {
@@ -207,7 +236,6 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
       const encryptionKeyBuffer = Buffer.from(encryptionKey, "base64");
       const processedFileBuffer = Buffer.from(processedFile, "base64");
 
-      // Step 3: Upload processed file to Pinata
       const uploadResponse = await fetch("/.netlify/functions/uploadToPinata", {
         method: "POST",
         headers: {
@@ -228,7 +256,10 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
       setFileCid(cid);
       setFileUrl(`https://ipfs.io/ipfs/${cid}`);
 
-      // Store uploaded file's metadata in state
+      if (noLoginAccount) {
+        setPrice("0");
+      }
+
       const newFileMetadata = {
         fileName,
         fileCid: cid,
@@ -241,7 +272,6 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
       setUploadedFiles((prevFiles) => [...prevFiles, newFileMetadata]);
 
       setStatus("File uploaded. Registering file on-chain...");
-      // Register file on-chain and pass the encryption key
       await registerFileOnChain(
         cid,
         fileName,
@@ -272,9 +302,6 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
     fileType
   ) => {
     try {
-      console.log("Registering file with size (MB):", fileSizeMB);
-
-      // Validate user input
       validateInput(cid, fileName, description, price, fileType);
 
       if (!provider || !walletPublicKey) {
@@ -283,14 +310,12 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
 
       const solanaWallet = new SolanaWallet(provider);
 
-      // Get connection details
       const connectionConfig = await solanaWallet.request({
         method: "solana_provider_config",
         params: [],
       });
       const connection = new Connection(connectionConfig.rpcTarget);
 
-      // Get accounts
       const accounts = await solanaWallet.requestAccounts();
 
       const priceInLamports =
@@ -305,19 +330,13 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
         fileType,
         encryptionKeyBuffer
       );
-      console.log(
-        "Instruction data prepared for transaction:",
-        instructionData
-      );
 
       const platformFeeAccount = new PublicKey(
         process.env.REACT_APP_PLATFORM_FEE_ACCOUNT
       );
 
-      // Hash the file name
       const fileNameHash = Buffer.from(sha256.digest(fileName));
 
-      // Deriving the Program Derived Address (PDA)
       const [fileInfoPda, bumpSeed] = await PublicKey.findProgramAddressSync(
         [
           new PublicKey(walletPublicKey).toBuffer(),
@@ -327,18 +346,10 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
         programID
       );
 
-      console.log("Derived File Info PDA:", fileInfoPda.toBase58());
-
-      // Check if PDA already exists
       const fileInfoAccount = await connection.getAccountInfo(fileInfoPda);
 
       if (!fileInfoAccount) {
-        console.log("File info account does not exist, creating it...");
-
-        // Fetch latest blockhash
         const block = await connection.getLatestBlockhash("finalized");
-        console.log("Latest Blockhash:", block.blockhash);
-        console.log("Last Valid Block Height:", block.lastValidBlockHeight);
 
         const transaction = new Transaction({
           blockhash: block.blockhash,
@@ -363,18 +374,13 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
           data: instructionData,
         });
 
-        // Use signAndSendTransaction directly
         const { signature } =
           await solanaWallet.signAndSendTransaction(transaction);
-        console.log("Transaction successful with signature:", signature);
-
-        // Update UI status
         setStatusColor("green");
         setStatus("File successfully registered.");
         navigate("/uploaderdashboard", { state: { shouldReload: true } });
       } else {
         console.log("File info account already exists, skipping creation.");
-        // Proceed with updating or using the file account logic here...
       }
     } catch (err) {
       console.error("Error during transaction:", err);
@@ -434,6 +440,79 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
     }
   };
 
+  const getShortenedIdentifier = (identifier) => {
+    if (!identifier) return "";
+    return `${identifier.slice(0, 4)}...${identifier.slice(-4)}`;
+  };
+
+  const uploadToPinataNoLogin = async () => {
+    if (!file || !fileName) {
+      alert("Please provide the file and name.");
+      return;
+    }
+
+    setLoading(true);
+    setStatusColor("");
+    setStatus("Processing and uploading file for guest user...");
+
+    try {
+      const fileArrayBuffer = await file.arrayBuffer();
+      const fileBuffer = Buffer.from(fileArrayBuffer);
+      const fileType = file.type;
+
+      const uploadResponse = await fetch("/.netlify/functions/uploadToPinata", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fileBuffer: fileBuffer.toString("base64"),
+        }),
+      });
+
+      const uploadData = await uploadResponse.json();
+      const cid = uploadData?.cid;
+
+      if (!cid) {
+        throw new Error("Failed to retrieve CID from Pinata");
+      }
+
+      setFileCid(cid);
+      setFileUrl(`https://ipfs.io/ipfs/${cid}`);
+
+      const newFileMetadata = {
+        fileName,
+        fileCid: cid,
+        fileType,
+        fileSizeMB,
+        description,
+      };
+      setUploadedFiles((prevFiles) => [...prevFiles, newFileMetadata]);
+
+      const storedFiles =
+        JSON.parse(localStorage.getItem(`files_${noLoginAccount.id}`)) || [];
+      storedFiles.push(newFileMetadata);
+      localStorage.setItem(
+        `files_${noLoginAccount.id}`,
+        JSON.stringify(storedFiles)
+      );
+
+      setStatus("File successfully uploaded without on-chain registration.");
+      setStatusColor("green");
+
+      navigate("/uploaderdashboard", { state: { shouldReload: true } });
+    } catch (error) {
+      console.error(
+        "Error during file processing or upload for no-login user:",
+        error
+      );
+      setStatusColor("red");
+      setStatus("Error during file upload.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="homepage-container">
       {/* Navbar */}
@@ -441,8 +520,9 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
         <div className="navbar-logo" onClick={() => navigate("/")}>
           <img src={logo} alt="Logo" className="logo" />
         </div>
-        <div className="wallet-info" onClick={handleTopUp}>
-          {walletPublicKey ? (
+
+        {walletPublicKey ? (
+          <div className="wallet-info" onClick={handleTopUp}>
             <div className="wallet-container">
               <div className="wallet-address">
                 <span className="wallet-icon">🔑</span>
@@ -457,11 +537,19 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
                 </div>
               </div>
             </div>
-          ) : (
-            <p>Loading wallet...</p>
-          )}
-          <p className="wallet-extra-info">Click Here to Fund Your Wallet</p>
-        </div>
+            <p className="wallet-extra-info">Click Here to Fund Your Wallet</p>
+          </div>
+        ) : noLoginAccount ? (
+          <div className="guest-account-info">
+            <p>
+              You are in guest account:{" "}
+              {getShortenedIdentifier(noLoginAccount.id)}
+            </p>
+          </div>
+        ) : (
+          <p>Loading...</p>
+        )}
+
         <div>
           <button onClick={navigateToDashboard} className="dashboard-button">
             Dashboard
@@ -469,8 +557,8 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
         </div>
       </nav>
 
-      {/* Top-Up Modal */}
-      {showTopUpModal && (
+      {/* Top-Up Modal - only show if user is logged-in */}
+      {walletPublicKey && showTopUpModal && (
         <div className="topup-modal">
           <div className="modal-content">
             <h3>Fund Your Wallet</h3>
@@ -513,8 +601,8 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
               ) : (
                 <div className="drag-inactive">
                   <img src={fox} alt="Logo" className="drag-image" />
-                  <p>Drag and drop files here, or click to upload</p>
-                  <p className="drop-instructions">Accepted: Images, PDFs</p>
+                  <p>Drag and drop files here,</p>
+                  <p>or click to upload</p>
                 </div>
               )}
             </>
@@ -526,8 +614,8 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
               transition={{ duration: 0.3 }}
             >
               <FaFileAlt size={50} />
-              <p>File uploaded: {fileName}</p>
-              <p>File size: {fileSizeMB} MB</p>
+              <p>{fileName}</p>
+              <p>{fileSizeMB} MB</p>
             </motion.div>
           ) : (
             <motion.div
@@ -564,18 +652,22 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
           />
           <input
             type="text"
-            placeholder="File URL (Generate Automatically)"
+            placeholder="File URL (Generated Automatically)"
             value={fileUrl}
             readOnly
             className="input-field"
           />
-          <input
-            type="number"
-            placeholder="Price (in SOL)"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className="input-field"
-          />
+          {walletPublicKey && (
+            <>
+              <input
+                type="number"
+                placeholder="Price (in SOL)"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                className="input-field"
+              />
+            </>
+          )}
           <textarea
             placeholder="Description"
             value={description}
@@ -586,18 +678,35 @@ function HomePage({ provider, walletServicesPlugin, web3auth }) {
             }}
             className="textarea"
           />
-          <p>{description.length}/1000</p> {/* Display character count */}
+          <p>{description.length}/1000</p>
         </motion.div>
 
         {/* Upload and Payment Buttons */}
         {!loading ? (
           <>
-            <motion.button className="upload-button" onClick={uploadToPinata}>
-              Upload and Pay with Crypto
-            </motion.button>
-            <motion.button className="fiat-button" onClick={handleFiatPayment}>
-              Pay with Fiat
-            </motion.button>
+            {walletPublicKey ? (
+              <>
+                <motion.button
+                  className="upload-button"
+                  onClick={uploadToPinata}
+                >
+                  Upload and Pay with Crypto
+                </motion.button>
+                <motion.button
+                  className="fiat-button"
+                  onClick={handleFiatPayment}
+                >
+                  Pay with Fiat
+                </motion.button>
+              </>
+            ) : (
+              <motion.button
+                className="upload-button"
+                onClick={uploadToPinataNoLogin}
+              >
+                Upload
+              </motion.button>
+            )}
           </>
         ) : (
           <div className="loading-container">

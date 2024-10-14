@@ -1,0 +1,175 @@
+/* General styling for the file detail page */
+.file-detail-container {
+  margin: 0 auto;
+  padding: 20px; /* Adjusted for smaller screens */
+  background-color: #3f3f46;
+  min-height: 100vh;
+  color: #fafafa;
+  font-family: "Poppins", sans-serif;
+  line-height: 1.6;
+  overflow: hidden; /* Prevent scrollbars for this container */
+}
+
+/* File viewer container with a natural, preview-like style and responsive size */
+.file-viewer-container {
+  margin: 20px auto; /* Center the container */
+  padding: 0; /* Remove padding to match native previews */
+  width: 90vw; /* Use 90% of viewport width to maintain responsiveness */
+  max-width: 1500px; /* Cap width at 1500px for larger screens */
+  height: 70vh; /* Use 70% of viewport height for responsiveness */
+  max-height: 800px; /* Cap height at 800px */
+  border-radius: 5px; /* Small radius to resemble device corners */
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1); /* Slight shadow for subtle depth */
+  display: flex;
+  align-items: center; /* Center items vertically */
+  justify-content: center; /* Center items horizontally */
+  overflow: hidden; /* Hide overflow */
+  background: none; /* No background for a more native-like experience */
+}
+
+/* pg-viewer-wrapper adjustments to prevent overflow and scrolling */
+.pg-viewer-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex; /* Use flexbox to center content */
+  align-items: center; /* Center content vertically */
+  justify-content: center; /* Center content horizontally */
+  margin: 0; /* Ensure no unwanted margins */
+  padding: 0; /* Remove extra padding */
+  overflow: hidden; /* Prevent scrollbars */
+}
+
+/* Image-specific styling to ensure it fits within the container */
+.file-viewer-container img,
+.pg-viewer-wrapper img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain; /* Maintain aspect ratio */
+  margin: auto; /* Center the image */
+  display: block; /* Ensure the image is displayed as a block element */
+  overflow: hidden; /* Prevent any overflow for images */
+}
+
+/* Styling for iframe, video, or embedded files */
+.file-viewer-container iframe,
+.file-viewer-container video,
+.file-viewer-container embed {
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* Maintain aspect ratio for embedded content */
+}
+
+/* Header and description styling */
+h1 {
+  font-size: 2rem;
+  margin-bottom: 20px;
+  background: linear-gradient(to right, #d4d4d8, #fafafa, #d4d4d8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-align: center;
+}
+
+p {
+  font-size: 1rem;
+  color: #fafafa;
+  margin: 10px 0;
+}
+
+/* Styling for file URL link */
+.file-url-link {
+  color: #4fae8b;
+  font-weight: bold;
+  text-decoration: none;
+}
+
+.file-url-link:hover {
+  text-decoration: underline;
+}
+
+/* Error message styling */
+.error-message {
+  color: #ff4d4d;
+  font-weight: bold;
+  text-align: center;
+}
+
+/* Additional button styling */
+.copy-link-button {
+  padding: 10px 20px;
+  background-color: #fafafa;
+  color: #3f3f46;
+  border: 1px solid #3f3f46;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-top: 20px;
+  transition: all 0.3s ease-in-out;
+}
+
+.copy-link-button:hover {
+  background-color: #4fae8b;
+  color: #fff;
+}
+
+/* Styling for back button */
+.back-button {
+  padding: 10px 20px;
+  background-color: #fafafa;
+  color: #3f3f46;
+  border: 1px solid #3f3f46;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-bottom: 20px;
+  transition: all 0.3s ease-in-out;
+  font-family: "Poppins", sans-serif;
+}
+
+.back-button:hover {
+  background-color: #4fae8b;
+  color: #fff;
+}
+
+/* Media queries for different screen sizes */
+@media (max-width: 768px) {
+  /* Mobile and tablet adjustments */
+  .file-detail-container {
+    padding: 10px; /* Reduce padding on smaller screens */
+  }
+
+  .file-viewer-container {
+    width: 90vw; /* Adjust width to fit smaller screens */
+    height: auto; /* Adjust height to maintain aspect ratio */
+    max-height: 400px; /* Maximum height for smaller screens */
+  }
+
+  h1 {
+    font-size: 1.8rem; /* Adjust header size for smaller devices */
+  }
+
+  p {
+    font-size: 0.9rem; /* Smaller font size for mobile */
+  }
+
+  .copy-link-button {
+    padding: 8px 15px; /* Smaller padding for buttons */
+    font-size: 0.9rem; /* Smaller button text */
+  }
+}
+
+@media (max-width: 480px) {
+  /* Very small devices adjustments */
+  .file-viewer-container {
+    width: 90vw; /* Use full width for very small screens */
+    height: auto; /* Auto height to keep aspect ratio */
+    max-height: 300px; /* Maximum height for very small devices */
+  }
+
+  h1 {
+    font-size: 1.5rem; /* Further reduce header size */
+  }
+
+  .copy-link-button {
+    padding: 6px 10px; /* Further smaller padding */
+    font-size: 0.8rem;
+  }
+}

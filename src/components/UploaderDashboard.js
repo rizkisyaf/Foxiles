@@ -6,7 +6,6 @@ import {
   SystemProgram,
   Transaction,
 } from "@solana/web3.js";
-import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import "./UploaderDashboard.css";
 import {
@@ -16,11 +15,16 @@ import {
 import { sha256 } from "js-sha256";
 import { prepareUpdateMetadataInstructionData } from "../utils/registerService";
 import { SolanaWallet } from "@web3auth/solana-provider";
-import logo from '../assets/2.png';
+import logo from "../assets/2.png";
 
 const programID = new PublicKey(`${process.env.REACT_APP_PROGRAM_ID}`);
 
-const UploaderDashboard = ({ provider, web3auth }) => {
+const UploaderDashboard = ({
+  provider = null,
+  web3auth = null,
+  noLoginAccount,
+}) => {
+  const isLoggedIn = provider && web3auth;
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
@@ -28,33 +32,44 @@ const UploaderDashboard = ({ provider, web3auth }) => {
   const [newFileName, setNewFileName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newPrice, setNewPrice] = useState("");
-  const [uploaderPublicKey, setUploaderPublicKey] = useState(null);
   const [walletPublicKey, setWalletPublicKey] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortOrder, setSortOrder] = useState("a-z");
+  const [searchKeyword, setSearchKeyword] = useState("");
   const navigate = useNavigate();
+  const ITEMS_PER_PAGE = 8;
 
   // Fetch uploaded files and display them
   const loadUploaderFiles = useCallback(async () => {
     try {
       setLoading(true);
 
-      // Fetch the public key from the Web3Auth provider
-      const solanaWallet = new SolanaWallet(provider);
-      const accounts = await solanaWallet.requestAccounts();
-      const uploaderPublicKey = new PublicKey(accounts[0]);
-      setWalletPublicKey(accounts[0]);
+      if (isLoggedIn) {
+        const solanaWallet = new SolanaWallet(provider);
+        const accounts = await solanaWallet.requestAccounts();
+        const uploaderPublicKey = new PublicKey(accounts[0]);
+        setWalletPublicKey(accounts[0]);
 
-      // Fetch files uploaded by the user
-      const uploadedFiles = await fetchUploaderFiles(uploaderPublicKey, {
-        limit: 100,
-      });
+        const uploadedFiles = await fetchUploaderFiles(uploaderPublicKey, {
+          limit: 100,
+        });
 
-      const filesWithMetadata = uploadedFiles.map((file) => ({
-        ...file,
-        fileType: file.fileType,
-        fileSizeMB: file.fileSizeMB,
-      }));
+        const filesWithMetadata = uploadedFiles.map((file) => ({
+          ...file,
+          fileType: file.fileType,
+          fileSizeMB: file.fileSizeMB,
+        }));
 
-      setFiles(filesWithMetadata);
+        setFiles(filesWithMetadata);
+      } else if (noLoginAccount) {
+        const storedFiles = localStorage.getItem(`files_${noLoginAccount.id}`);
+        if (storedFiles) {
+          setFiles(JSON.parse(storedFiles));
+        } else {
+          setFiles([]);
+        }
+      }
+
       setStatus("");
     } catch (error) {
       console.error("Error fetching uploader files:", error);
@@ -62,20 +77,15 @@ const UploaderDashboard = ({ provider, web3auth }) => {
     } finally {
       setLoading(false);
     }
-  }, [provider]);
+  }, [provider, noLoginAccount, isLoggedIn]);
 
   useEffect(() => {
-    if (provider && web3auth) {
+    loadUploaderFiles();
+
+    if (window.history.state && window.history.state.shouldReload) {
       loadUploaderFiles();
     }
-
-    // Check if the window history state indicates a need to reload the files
-    if (window.history.state && window.history.state.shouldReload) {
-      setTimeout(() => {
-        loadUploaderFiles();
-      }, 3000); // Wait for 3 seconds before loading files
-    }
-  }, [provider, web3auth, loadUploaderFiles]);
+  }, [loadUploaderFiles]);
 
   const navigateToHome = () => {
     navigate("/dashboard");
@@ -95,6 +105,11 @@ const UploaderDashboard = ({ provider, web3auth }) => {
   };
 
   const handleUpdateMetadata = async () => {
+    if (!isLoggedIn) {
+      alert("You need to be logged in to update metadata.");
+      return;
+    }
+
     try {
       if (!newFileName || !newDescription || !newPrice) {
         setStatus("Please provide all metadata fields.");
@@ -104,21 +119,17 @@ const UploaderDashboard = ({ provider, web3auth }) => {
       setLoading(true);
       setStatus("Updating file metadata...");
 
-      // Convert new price to Lamports
       const newPriceInLamports = parseFloat(newPrice) * LAMPORTS_PER_SOL;
 
-      // Get the user's wallet public key
       const solanaWallet = new SolanaWallet(provider);
       const accounts = await solanaWallet.requestAccounts();
       const uploaderPublicKey = accounts[0];
 
-      // Prepare instruction data
       const instructionData = prepareUpdateMetadataInstructionData(
         newDescription,
         newPriceInLamports
       );
 
-      // Derive PDA for the file using the same method as in Solana program
       const fileNameHash = Buffer.from(sha256.digest(selectedFile.fileName));
 
       const [fileInfoPda] = await PublicKey.findProgramAddressSync(
@@ -130,7 +141,6 @@ const UploaderDashboard = ({ provider, web3auth }) => {
         programID
       );
 
-      // Create the transaction
       const connectionConfig = await solanaWallet.request({
         method: "solana_provider_config",
         params: [],
@@ -155,14 +165,12 @@ const UploaderDashboard = ({ provider, web3auth }) => {
         data: instructionData,
       });
 
-      // Send the transaction
       const { signature } =
         await solanaWallet.signAndSendTransaction(transaction);
       console.log("Update transaction signature:", signature);
 
       setStatus("File metadata updated successfully.");
 
-      // Delay refresh to allow server data sync
       setTimeout(() => {
         loadUploaderFiles();
       }, 3000);
@@ -176,6 +184,48 @@ const UploaderDashboard = ({ provider, web3auth }) => {
     }
   };
 
+  const handleSort = (order) => {
+    setSortOrder(order);
+    setCurrentPage(1);
+  };
+
+  const handleSearch = (e) => {
+    setSearchKeyword(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const sortedFiles = files
+    .filter(
+      (file) =>
+        file.fileName.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        file.description.toLowerCase().includes(searchKeyword.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (sortOrder === "a-z") {
+        return a.fileName.localeCompare(b.fileName);
+      }
+      return 0;
+    });
+
+  const paginatedFiles = sortedFiles.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  const totalPages = Math.ceil(sortedFiles.length / ITEMS_PER_PAGE);
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const handlePreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
   return (
     <div className="uploader-dashboard">
       <div className="header-container">
@@ -185,7 +235,6 @@ const UploaderDashboard = ({ provider, web3auth }) => {
             <button onClick={navigateToHome} className="dashboard-button">
               Go Back to Homepage
             </button>
-            {/* Copy Profile Link Button */}
             <button
               onClick={handleCopyProfileLink}
               className="dashboard-button"
@@ -193,27 +242,38 @@ const UploaderDashboard = ({ provider, web3auth }) => {
               Copy Profile Link
             </button>
           </div>
-          <p>
-            Share this link with your buyers so they can view all your files.
-          </p>
+          <p>Share this link so they can view all your files.</p>
         </div>
         <div className="right-side">
           <img src={logo} alt="Logo" className="logo" />
         </div>
       </div>
 
+      <div className="controls">
+        <input
+          type="text"
+          className="search-input"
+          placeholder="Search by file name or description..."
+          value={searchKeyword}
+          onChange={handleSearch}
+        />
+        <button onClick={() => handleSort("a-z")} className="sort-button">
+          Sort A-Z
+        </button>
+      </div>
+
       {loading ? (
         <p>Loading your files...</p>
-      ) : files.length === 0 ? (
+      ) : paginatedFiles.length === 0 ? (
         <p>No files uploaded yet.</p>
       ) : (
         <div className="file-list">
-          {files.map((file) => (
+          {paginatedFiles.map((file) => (
             <div className="file-item" key={file.fileCid}>
               <h3>{file.fileName}</h3>
               <p>{file.description}</p>
-              <p>Price: {file.price} SOL</p>
-              {file.extraFee > 0 && (
+              {isLoggedIn && <p>Price: {file.price} SOL</p>}
+              {file.extraFee > 0 && isLoggedIn && (
                 <p>Extra Fee for Size: {file.extraFee} SOL</p>
               )}
 
@@ -221,7 +281,6 @@ const UploaderDashboard = ({ provider, web3auth }) => {
                 <button className="ds-button">View Details</button>
               </Link>
 
-              {/* Button to copy the link */}
               <button
                 onClick={() => {
                   const shareLink = `${window.location.origin}/file/${file.fileCid}`;
@@ -233,16 +292,38 @@ const UploaderDashboard = ({ provider, web3auth }) => {
                 Copy Share Link
               </button>
 
-              <button
-                onClick={() => openEditFileModal(file)}
-                className="ds-button"
-              >
-                Edit Metadata
-              </button>
+              {isLoggedIn && (
+                <button
+                  onClick={() => openEditFileModal(file)}
+                  className="ds-button"
+                >
+                  Edit Metadata
+                </button>
+              )}
             </div>
           ))}
         </div>
       )}
+
+      <div className="pagination-controls">
+        <button
+          className="pagination-button"
+          onClick={handlePreviousPage}
+          disabled={currentPage === 1}
+        >
+          Previous
+        </button>
+        <span>
+          Page {currentPage} of {totalPages}
+        </span>
+        <button
+          className="pagination-button"
+          onClick={handleNextPage}
+          disabled={currentPage === totalPages}
+        >
+          Next
+        </button>
+      </div>
 
       {selectedFile && (
         <div className="edit-modal">

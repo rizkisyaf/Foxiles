@@ -9,7 +9,7 @@ const { Connection, PublicKey } = require("@solana/web3.js");
 const serverless = require("serverless-http");
 const { handler: processFileHandler } = require("./processFile");
 const { handler: uploadToPinataHandler } = require("./uploadToPinata");
-const { fetchEncryptedFile } = require("./fetchEncryptedFile.js");
+const { handler: fetchEncryptedFileHandler } = require("./fetchEncryptedFile.js");
 
 const app = express();
 const connection = new Connection("https://api.devnet.solana.com", "confirmed");
@@ -30,54 +30,13 @@ app.post("/.netlify/functions/uploadToPinata", async (req, res) => {
   res.status(result.statusCode).json(JSON.parse(result.body));
 });
 
-// Route to upload processed file to IPFS via Pinata
-app.post("/.netlify/functions/uploadToPinata", async (req, res) => {
-  try {
-    const fileBuffer = Buffer.from(req.body.fileBuffer, "base64");
-
-    const formData = new FormData();
-    formData.append("file", fileBuffer, "drmFile");
-
-    const metadata = JSON.stringify({
-      name: "DRM File",
-      keyvalues: {
-        encrypted: "true",
-      },
-    });
-    formData.append("pinataMetadata", metadata);
-
-    const options = JSON.stringify({ cidVersion: 1 });
-    formData.append("pinataOptions", options);
-
-    const response = await axios.post(
-      "https://api.pinata.cloud/pinning/pinFileToIPFS",
-      formData,
-      {
-        headers: {
-          "Content-Type": `multipart/form-data`,
-          Authorization: `Bearer ${process.env.REACT_APP_PINATA_JWT}`,
-          ...formData.getHeaders(),
-        },
-      }
-    );
-
-    res.json({ cid: response.data.IpfsHash });
-  } catch (error) {
-    console.error("Error uploading file to Pinata:", error);
-    res.status(500).json({
-      error: "Failed to upload file to Pinata",
-      details: error.message || error,
-    });
-  }
-});
-
 // Fetch encrypted file from IPFS
 app.get("/.netlify/functions/fetchEncryptedFile/:fileCid", async (req, res) => {
   const { fileCid } = req.params;
 
   try {
     console.log(`Received request for file CID: ${fileCid}`);
-    const fileBuffer = await fetchEncryptedFile(fileCid);
+    const fileBuffer = await fetchEncryptedFileHandler(fileCid);
 
     if (!fileBuffer) {
       console.log("File not found in IPFS.");

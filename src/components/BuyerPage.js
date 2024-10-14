@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { useParams } from "react-router-dom";
-import { LAMPORTS_PER_SOL, PublicKey, Connection, Keypair } from "@solana/web3.js";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { PublicKey, Connection, Keypair } from "@solana/web3.js";
 import { Oval } from "react-loader-spinner";
 import { motion } from "framer-motion";
 import { fetchUploaderFiles } from "../utils/UploaderService";
@@ -15,6 +15,7 @@ const PAYMENT_TIMEOUT = 180000; // 180 seconds
 
 function BuyerPage({ provider }) {
   const { influencerId } = useParams();
+  const navigate = useNavigate();
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
@@ -28,26 +29,43 @@ function BuyerPage({ provider }) {
   const [paymentInterval, setPaymentInterval] = useState(null);
   const [countdown, setCountdown] = useState(PAYMENT_TIMEOUT / 1000);
   const [qrRendered, setQrRendered] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [sortOrder, setSortOrder] = useState("a-z");
 
-  const connection = new Connection("https://solana-devnet.g.alchemy.com/v2/C191ERIvh8Hz0SAcEpq2_F3jr4wbMbHR");
+  const connection = useMemo(() => {
+    return new Connection(
+      "https://solana-devnet.g.alchemy.com/v2/C191ERIvh8Hz0SAcEpq2_F3jr4wbMbHR"
+    );
+  }, []);
 
   // Fetch the uploader's files metadata
   const fetchUploaderFilesMetadata = useCallback(async () => {
     setLoading(true);
     setStatus("Fetching uploader's files...");
     try {
-      const uploaderPublicKey = new PublicKey(influencerId);
-      const uploadedFiles = await fetchUploaderFiles(uploaderPublicKey, {
-        limit: 100,
-      });
-      const filesWithMetadata = uploadedFiles.map((file) => ({
-        ...file,
-        fileType: file.fileType,
-        fileSizeMB: file.fileSizeMB,
-      }));
+      // Check if influencerId is for a no-login user or a wallet user
+      const storedFiles = localStorage.getItem(`files_${influencerId}`);
+      if (storedFiles) {
+        // Handle files uploaded by no-login users
+        const filesWithMetadata = JSON.parse(storedFiles);
+        setFiles(filesWithMetadata);
+        setTotalPages(Math.ceil(filesWithMetadata.length / ITEMS_PER_PAGE));
+      } else {
+        // Handle files uploaded and registered on-chain
+        const uploaderPublicKey = new PublicKey(influencerId);
+        const uploadedFiles = await fetchUploaderFiles(uploaderPublicKey, {
+          limit: 100,
+        });
+        const filesWithMetadata = uploadedFiles.map((file) => ({
+          ...file,
+          fileType: file.fileType,
+          fileSizeMB: file.fileSizeMB,
+        }));
 
-      setFiles(filesWithMetadata);
-      setTotalPages(Math.ceil(filesWithMetadata.length / ITEMS_PER_PAGE));
+        setFiles(filesWithMetadata);
+        setTotalPages(Math.ceil(filesWithMetadata.length / ITEMS_PER_PAGE));
+      }
+
       setStatus("");
     } catch (err) {
       console.error("Error fetching files:", err);
@@ -70,6 +88,23 @@ function BuyerPage({ provider }) {
       const { encryptedData, metadata } = await fetchEncryptedFileData(
         selectedFile.fileCid
       );
+
+      if (!metadata) {
+        throw new Error("Metadata is missing or could not be fetched.");
+      }
+
+      if (
+        !metadata ||
+        !metadata.encryptionKey ||
+        !metadata.iv ||
+        !metadata.fileType ||
+        !metadata.encryptionKey
+      ) {
+        throw new Error(
+          "Missing required metadata fields (encryptionKey, iv, or fileType)."
+        );
+      }
+
       setStatus("Decrypting file...");
       const decryptedFile = decryptFile(
         encryptedData,
@@ -105,41 +140,10 @@ function BuyerPage({ provider }) {
     }
   }, [selectedFile, paymentTimeout, paymentInterval]);
 
-  // Start listening for the payment using the reference
-  const startPaymentListening = useCallback(async () => {
-    if (!reference) return;
-
-    setStatus("Waiting for your payment...");
-
-    try {
-      const interval = setInterval(async () => {
-        try {
-          // Use findReference to search for the transaction with the reference
-          const confirmedTransaction = await findReference(connection, reference);
-          if (confirmedTransaction) {
-            setStatus("Payment received...");
-            handlePaymentConfirmed();
-          }
-        } catch (error) {
-          if (error.message !== 'not found') {
-            console.error("Error checking payment status:", error);
-          }
-        }
-      }, 5000);
-
-      const timeout = setTimeout(() => {
-        clearInterval(interval);
-        setShowCryptoModal(false);
-        setStatus("Payment not completed within the time limit. Please try again.");
-      }, PAYMENT_TIMEOUT);
-
-      setPaymentInterval(interval);
-      setPaymentTimeout(timeout);
-    } catch (error) {
-      console.error("Error starting payment process:", error);
-      setStatus("Error initializing the payment. Please try again.");
-    }
-  }, [reference, connection, handlePaymentConfirmed]);
+  // Handle preview file button click
+  const handlePreviewFile = (file) => {
+    navigate(`/file/${file.fileCid}`);
+  };
 
   // Handle the "Buy with Crypto" button click
   const handleBuyFileWithCrypto = (file) => {
@@ -150,52 +154,15 @@ function BuyerPage({ provider }) {
     setShowCryptoModal(true);
     setStatus("Please complete the payment to receive the file.");
     setCountdown(PAYMENT_TIMEOUT / 1000);
-    setQrRendered(false); // Reset QR render flag when modal is reopened
+    setQrRendered(false);
   };
 
-  // Effect to generate QR after reference is set
-  useEffect(() => {
-    if (!reference || !selectedFile || qrRendered) return;
-
-    const recipient = new PublicKey(influencerId);
-    const priceInSOL = parseFloat(selectedFile.price);
-
-    if (isNaN(priceInSOL) || priceInSOL <= 0) {
-      console.error("Invalid price for selected file:", selectedFile.price);
-      setStatus("Invalid price for the selected file. Please try again.");
-      return;
-    }
-
-    // Generate Solana Pay URL with recipient, amount, and reference
-    const url = encodeURL({
-      recipient,
-      amount: new BigNumber(priceInSOL),
-      reference, // Add the reference to track the transaction
-    });
-
-    // Ensure QR only renders once
-    const qrCodeElement = document.getElementById("solana-payment-qr");
-    if (qrCodeElement && !qrRendered) {
-      qrCodeElement.innerHTML = ""; // Clear any previous QR code
-      const qr = createQR(url, 200, "transparent");
-      qr.append(qrCodeElement); // Append the newly generated QR code
-      setQrRendered(true); // Mark QR as rendered
-    }
-
-    // Start payment listening after generating the QR code
-    startPaymentListening();
-  }, [reference, selectedFile, influencerId, startPaymentListening, qrRendered]);
-
-  // Effect for countdown timer
-  useEffect(() => {
-    if (showCryptoModal && countdown > 0) {
-      const countdownInterval = setInterval(() => {
-        setCountdown((prevCountdown) => prevCountdown - 1);
-      }, 1000);
-
-      return () => clearInterval(countdownInterval);
-    }
-  }, [showCryptoModal, countdown]);
+  // Handle copying the shareable link
+  const handleCopyShareableLink = (file) => {
+    const shareLink = `${window.location.origin}/file/${file.fileCid}`;
+    navigator.clipboard.writeText(shareLink);
+    alert("Shareable link copied to clipboard!");
+  };
 
   const handleModalClose = () => {
     setShowCryptoModal(false); // Close the modal
@@ -203,11 +170,6 @@ function BuyerPage({ provider }) {
     setQrRendered(false); // Reset QR render flag
     setCountdown(PAYMENT_TIMEOUT / 1000); // Reset countdown
   };
-
-  const paginatedFiles = files.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
 
   const handleNextPage = () => {
     if (currentPage < totalPages) {
@@ -220,6 +182,90 @@ function BuyerPage({ provider }) {
       setCurrentPage(currentPage - 1);
     }
   };
+
+  const handleSort = (order) => {
+    setSortOrder(order);
+    setCurrentPage(1);
+  };
+
+  const handleSearch = (e) => {
+    setSearchKeyword(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const sortedFiles = files
+    .filter(
+      (file) =>
+        file.fileName.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+        file.description.toLowerCase().includes(searchKeyword.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (sortOrder === "a-z") {
+        return a.fileName.localeCompare(b.fileName);
+      }
+      return 0;
+    });
+
+  const paginatedFiles = sortedFiles.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
+  useEffect(() => {
+    if (showCryptoModal && reference && !qrRendered) {
+      const amount = new BigNumber(selectedFile.price);
+      const label = "Foxiles File Payment";
+      const message = `Payment for file: ${selectedFile.fileName}`;
+
+      const url = encodeURL({
+        recipient: new PublicKey(influencerId),
+        amount,
+        reference,
+        label,
+        message,
+      });
+      const qr = createQR(url, 350, "transparent");
+      qr.append(document.getElementById("solana-payment-qr"));
+      setQrRendered(true);
+
+      // Start countdown timer
+      const countdownInterval = setInterval(() => {
+        setCountdown((prevCountdown) => {
+          if (prevCountdown > 1) {
+            return prevCountdown - 1;
+          } else {
+            clearInterval(countdownInterval);
+            return 0;
+          }
+        });
+      }, 1000);
+
+      // Start polling for payment confirmation
+      const interval = setInterval(async () => {
+        try {
+          const signatureInfo = await findReference(connection, reference);
+          if (signatureInfo.confirmationStatus === "finalized") {
+            clearInterval(interval);
+            clearInterval(countdownInterval);
+            handlePaymentConfirmed();
+          }
+        } catch (err) {
+          // Keep polling until payment is found or timeout
+        }
+      }, 2000);
+
+      setPaymentInterval(interval);
+      setPaymentTimeout(countdownInterval);
+    }
+  }, [
+    showCryptoModal,
+    reference,
+    qrRendered,
+    influencerId,
+    connection,
+    selectedFile,
+    handlePaymentConfirmed,
+  ]);
 
   return (
     <div className="buyer-page-container">
@@ -249,6 +295,20 @@ function BuyerPage({ provider }) {
             </button>
           </div>
           <h2 className="files-header">Files Uploaded by {influencerId}</h2>
+
+          <div className="controls">
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search by file name or description..."
+              value={searchKeyword}
+              onChange={handleSearch}
+            />
+            <button onClick={() => handleSort("a-z")} className="sort-button">
+              Sort A-Z
+            </button>
+          </div>
+
           <div className="files-section">
             {paginatedFiles.length === 0 ? (
               <p>No files found for this uploader.</p>
@@ -259,14 +319,34 @@ function BuyerPage({ provider }) {
                   <p>Type: {file.fileType}</p>
                   <p>Size: {file.fileSizeMB} MB</p>
                   <p>{file.description}</p>
-                  <p>Price: {file.price} SOL</p>
+                  {file.price ? (
+                    <p>Price: {file.price} SOL</p>
+                  ) : (
+                    <p>Preview only. No price set for this file.</p>
+                  )}
 
                   <button
+                    onClick={() => handleCopyShareableLink(file)}
                     className="buyer-ds-button"
-                    onClick={() => handleBuyFileWithCrypto(file)}
                   >
-                    Buy with Crypto
+                    Copy Shareable Link
                   </button>
+
+                  {file.price ? (
+                    <button
+                      className="buyer-ds-button"
+                      onClick={() => handleBuyFileWithCrypto(file)}
+                    >
+                      Buy with Crypto
+                    </button>
+                  ) : (
+                    <button
+                      className="buyer-ds-button"
+                      onClick={() => handlePreviewFile(file)}
+                    >
+                      Preview File
+                    </button>
+                  )}
                 </div>
               ))
             )}
