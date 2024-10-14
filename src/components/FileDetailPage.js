@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useParams } from "react-router-dom";
-import { fetchFileMetadata } from "../utils/UploaderService";
-import { fetchEncryptedFileData, decryptFile } from "../utils/drmservice";
+import { decryptFile } from "../utils/drmservice";
 import FileViewer from "react-file-viewer";
 import { pdfjs } from "react-pdf";
 import "@react-pdf-viewer/core/lib/styles/index.css";
@@ -28,64 +27,48 @@ const FileDetailPage = () => {
         const searchParams = new URLSearchParams(location.search);
         const type = searchParams.get("type");
 
-        // Check if file metadata exists in localStorage (for no-login users)
-        let metadata = null;
+        // Use the Netlify function to fetch encrypted file from IPFS
+        const response = await fetch(
+          `/.netlify/functions/fetchEncryptedFile/${fileCid}`
+        );
 
-        // Fetch metadata directly from IPFS for no-login users or logged-in users
-        const gatewayUrl = process.env.REACT_APP_PINATA_GATEWAY_URL;
-
-        if (type === "no-login" || type === "login") {
-          const response = await fetch(`${gatewayUrl}/ipfs/${fileCid}`, {
-            headers: {
-              Authorization: `Bearer ${process.env.REACT_APP_PINATA_JWT}`,
-              "Content-Type": "application/json",
-            },
-          });
-
-          if (!response.ok) {
-            throw new Error("Failed to fetch metadata from IPFS.");
-          }
-
-          const contentType = response.headers.get("content-type");
-          if (contentType && contentType.includes("application/json")) {
-            metadata = await response.json();
-          } else {
-            throw new Error(`Unexpected content type: ${contentType}`);
-          }
+        if (!response.ok) {
+          throw new Error("Failed to fetch file data from Netlify function.");
         }
 
-        if (!metadata) {
-          throw new Error("File metadata not found.");
+        // The file is returned as a base64 encoded string, decode it to buffer
+        const base64File = await response.text();
+        const fileBuffer = Buffer.from(base64File, "base64");
+
+        // Extract metadata from the file buffer
+        const metadataLength = fileBuffer.readUInt32BE(0); // First 4 bytes contain metadata length
+        const metadataBuffer = fileBuffer.slice(4, 4 + metadataLength);
+        const metadata = JSON.parse(metadataBuffer.toString());
+
+        if (!metadata.encryptionKey || !metadata.iv) {
+          throw new Error("Missing encryption key or IV in file metadata");
         }
 
         setFileMetadata(metadata);
 
-        // Fetch and decrypt the file data if necessary
-        const result = await fetchEncryptedFileData(fileCid);
-        if (result.metadata && result.metadata.isEncrypted) {
-          const { encryptedData, metadata: fileEncryptionMetadata } = result;
+        // Extract the encrypted file part and decrypt if necessary
+        const encryptedFileBuffer = fileBuffer.slice(4 + metadataLength);
 
-          if (
-            fileEncryptionMetadata.encryptionKey &&
-            fileEncryptionMetadata.iv
-          ) {
-            const decryptedFile = decryptFile(
-              encryptedData,
-              fileEncryptionMetadata.encryptionKey,
-              fileEncryptionMetadata.iv
-            );
+        if (metadata.isEncrypted) {
+          const decryptedFile = decryptFile(
+            encryptedFileBuffer,
+            metadata.encryptionKey,
+            metadata.iv
+          );
 
-            // Create a Blob URL for the decrypted file
-            const mimeType = getMimeType(metadata);
-            const blob = new Blob([decryptedFile], { type: mimeType });
-            const fileUrl = URL.createObjectURL(blob);
-            setDecryptedFileUrl(fileUrl);
-          } else {
-            throw new Error("Missing encryption key or IV in file metadata");
-          }
+          // Create a Blob URL for the decrypted file
+          const mimeType = getMimeType(metadata);
+          const blob = new Blob([decryptedFile], { type: mimeType });
+          const fileUrl = URL.createObjectURL(blob);
+          setDecryptedFileUrl(fileUrl);
         } else {
           // If the file is not encrypted, create a Blob URL directly
-          const blob = new Blob([result.fileBuffer], {
+          const blob = new Blob([encryptedFileBuffer], {
             type: getMimeType(metadata),
           });
           const fileUrl = URL.createObjectURL(blob);
