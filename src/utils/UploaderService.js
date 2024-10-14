@@ -75,7 +75,6 @@ export const updateFileMetadata = async (
   }
 };
 
-// Fetch metadata for a specific file from Pinata
 // Fetch file or metadata for a specific file from Pinata
 export const fetchFileMetadata = async (fileCid) => {
   try {

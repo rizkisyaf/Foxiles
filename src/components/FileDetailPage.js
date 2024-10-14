@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { fetchFileMetadata } from "../utils/UploaderService";
 import { fetchEncryptedFileData, decryptFile } from "../utils/drmservice";
 import FileViewer from "react-file-viewer";
@@ -13,6 +13,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pd
 
 const FileDetailPage = () => {
   const { fileCid } = useParams();
+  const location = useLocation();
   const [fileMetadata, setFileMetadata] = useState(null);
   const [decryptedFileUrl, setDecryptedFileUrl] = useState("");
   const [error, setError] = useState("");
@@ -23,58 +24,72 @@ const FileDetailPage = () => {
       try {
         setLoading(true);
 
+        // Determine if the link contains the query parameter ?type=no-login
+        const searchParams = new URLSearchParams(location.search);
+        const type = searchParams.get("type");
+
         // Check if file metadata exists in localStorage (for no-login users)
         let metadata = null;
-        const storedAccounts = Object.keys(localStorage).filter((key) =>
-          key.startsWith("files_")
-        );
-        for (const accountKey of storedAccounts) {
-          const storedFiles = JSON.parse(localStorage.getItem(accountKey));
-          metadata = storedFiles.find((file) => file.fileCid === fileCid);
-          if (metadata) break;
+
+        // Fetch metadata directly from IPFS for no-login users or logged-in users
+        const gatewayUrl = process.env.REACT_APP_PINATA_GATEWAY_URL;
+
+        if (type === "no-login" || type === "login") {
+          const response = await fetch(`${gatewayUrl}/ipfs/${fileCid}`, {
+            headers: {
+              Authorization: `Bearer ${process.env.REACT_APP_PINATA_JWT}`,
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to fetch metadata from IPFS.");
+          }
+
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            metadata = await response.json();
+          } else {
+            throw new Error(`Unexpected content type: ${contentType}`);
+          }
         }
 
-        // If not found in localStorage, fetch from blockchain (for wallet users)
         if (!metadata) {
-          metadata = await fetchFileMetadata(fileCid);
+          throw new Error("File metadata not found.");
         }
 
         setFileMetadata(metadata);
 
-        // Fetch and decrypt the file data
-        if (metadata) {
-          const result = await fetchEncryptedFileData(fileCid);
+        // Fetch and decrypt the file data if necessary
+        const result = await fetchEncryptedFileData(fileCid);
+        if (result.metadata && result.metadata.isEncrypted) {
+          const { encryptedData, metadata: fileEncryptionMetadata } = result;
 
-          if (result.metadata && result.metadata.isEncrypted) {
-            // Encrypted file: Decrypt it using the provided encryption key and IV
-            const { encryptedData, metadata: fileEncryptionMetadata } = result;
-
-            if (
-              fileEncryptionMetadata.encryptionKey &&
+          if (
+            fileEncryptionMetadata.encryptionKey &&
+            fileEncryptionMetadata.iv
+          ) {
+            const decryptedFile = decryptFile(
+              encryptedData,
+              fileEncryptionMetadata.encryptionKey,
               fileEncryptionMetadata.iv
-            ) {
-              const decryptedFile = decryptFile(
-                encryptedData,
-                fileEncryptionMetadata.encryptionKey,
-                fileEncryptionMetadata.iv
-              );
+            );
 
-              // Create a Blob URL for the decrypted file to pass to the viewer
-              const mimeType = getMimeType(metadata);
-              const blob = new Blob([decryptedFile], { type: mimeType });
-              const fileUrl = URL.createObjectURL(blob);
-              setDecryptedFileUrl(fileUrl);
-            } else {
-              throw new Error("Missing encryption key or IV in file metadata");
-            }
-          } else {
-            // Non-encrypted file
-            const blob = new Blob([result.fileBuffer], {
-              type: getMimeType(metadata),
-            });
+            // Create a Blob URL for the decrypted file
+            const mimeType = getMimeType(metadata);
+            const blob = new Blob([decryptedFile], { type: mimeType });
             const fileUrl = URL.createObjectURL(blob);
             setDecryptedFileUrl(fileUrl);
+          } else {
+            throw new Error("Missing encryption key or IV in file metadata");
           }
+        } else {
+          // If the file is not encrypted, create a Blob URL directly
+          const blob = new Blob([result.fileBuffer], {
+            type: getMimeType(metadata),
+          });
+          const fileUrl = URL.createObjectURL(blob);
+          setDecryptedFileUrl(fileUrl);
         }
       } catch (error) {
         console.error("Error loading file data:", error);
@@ -87,12 +102,15 @@ const FileDetailPage = () => {
     if (fileCid) {
       loadFileData();
     }
-  }, [fileCid]);
+  }, [fileCid, location.search]);
 
   // Function to get the correct MIME type
   const getMimeType = (metadata) => {
     // Force .pptx to have the correct MIME type
-    if (metadata.fileName?.endsWith(".pptx") || metadata.fileType === "application/zip") {
+    if (
+      metadata.fileName?.endsWith(".pptx") ||
+      metadata.fileType === "application/zip"
+    ) {
       return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
     }
     return metadata.fileType;
@@ -164,10 +182,17 @@ const FileDetailPage = () => {
                 >
                   Your browser does not support the video tag.
                 </video>
-              ) : ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "application/zip"].includes(fileMetadata.fileType) ? (
+              ) : [
+                  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                  "application/zip",
+                ].includes(fileMetadata.fileType) ? (
                 // Suggest download for .docx, .pptx, .zip
                 <div>
-                  <p>Preview not available for this file type. Please download to view it locally.</p>
+                  <p>
+                    Preview not available for this file type. Please download to
+                    view it locally.
+                  </p>
                   <a
                     href={decryptedFileUrl}
                     download={fileMetadata.fileName}

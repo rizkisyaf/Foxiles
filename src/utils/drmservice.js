@@ -128,8 +128,15 @@ export const fetchEncryptedFileData = async (fileCid) => {
     }
 
     // If the content is an image or another standard type (not encrypted), return the file buffer as is.
+    const isImage =
+      contentType === "image/jpeg" ||
+      contentType === "image/png" ||
+      contentType === "image/webp" ||
+      contentType === "image/svg+xml";
+
+    // If the content is an image or another standard type (not encrypted), return the file buffer as is.
     if (
-      contentType.startsWith("image/") ||
+      isImage ||
       contentType.startsWith("video/") ||
       contentType.startsWith("audio/") ||
       contentType === "application/pdf"
@@ -211,6 +218,8 @@ export const decryptFile = (encryptedData, encryptionKey, iv) => {
     return decodedBuffer;
   } catch (err) {
     console.error("Decryption failed with error:", err);
-    throw new Error("Error decrypting file, please verify encryptionKey and IV.");
+    throw new Error(
+      "Error decrypting file, please verify encryptionKey and IV."
+    );
   }
 };

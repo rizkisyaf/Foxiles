@@ -293,7 +293,11 @@ const UploaderDashboard = ({
 
               <button
                 onClick={() => {
-                  const shareLink = `${window.location.origin}/file/${file.fileCid}`;
+                  let shareLink = `${window.location.origin}/file/${file.fileCid}`;
+                  if (!isLoggedIn) {
+                    // If the uploader is a no-login user, add the `type` query parameter
+                    shareLink += "?type=no-login";
+                  }
                   navigator.clipboard.writeText(shareLink);
                   alert("Shareable link copied to clipboard!");
                 }}

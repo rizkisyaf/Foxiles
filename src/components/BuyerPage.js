@@ -159,7 +159,13 @@ function BuyerPage({ provider }) {
 
   // Handle copying the shareable link
   const handleCopyShareableLink = (file) => {
-    const shareLink = `${window.location.origin}/file/${file.fileCid}`;
+    let shareLink = `${window.location.origin}/file/${file.fileCid}`;
+    const storedFiles = localStorage.getItem(`files_${influencerId}`);
+    if (storedFiles) {
+      // If the file is from a no-login user, add the `type` query parameter
+      shareLink += "?type=no-login";
+    }
+
     navigator.clipboard.writeText(shareLink);
     alert("Shareable link copied to clipboard!");
   };

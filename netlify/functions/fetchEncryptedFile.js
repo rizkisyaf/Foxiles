@@ -46,6 +46,9 @@ exports.handler = async (event) => {
       statusCode: 200,
       headers: {
         "Content-Type": contentType, // Return the original content type
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
       },
       body: response.data.toString("base64"),
       isBase64Encoded: true, // Indicate that the response body is base64 encoded
@@ -54,6 +57,11 @@ exports.handler = async (event) => {
     console.error("Error fetching encrypted file from IPFS:", error);
     return {
       statusCode: 500,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+      },
       body: JSON.stringify({ error: "Failed to fetch encrypted file data." }),
     };
   }
