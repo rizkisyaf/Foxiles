@@ -99,9 +99,19 @@ const UploaderDashboard = ({
   };
 
   const handleCopyProfileLink = () => {
-    const profileLink = `${window.location.origin}/u/${walletPublicKey}`;
-    navigator.clipboard.writeText(profileLink);
-    alert("Uploader profile link copied to clipboard!");
+    let profileLink = "";
+    if (isLoggedIn) {
+      profileLink = `${window.location.origin}/u/${walletPublicKey}`;
+    } else if (noLoginAccount) {
+      profileLink = `${window.location.origin}/u/${noLoginAccount.id}`;
+    }
+
+    if (profileLink) {
+      navigator.clipboard.writeText(profileLink);
+      alert("Uploader profile link copied to clipboard!");
+    } else {
+      alert("Unable to generate profile link.");
+    }
   };
 
   const handleUpdateMetadata = async () => {
