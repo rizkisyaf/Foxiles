@@ -23,10 +23,6 @@ const FileDetailPage = () => {
       try {
         setLoading(true);
 
-        // Determine if the link contains the query parameter ?type=no-login
-        const searchParams = new URLSearchParams(location.search);
-        const type = searchParams.get("type");
-
         // Use the Netlify function to fetch encrypted file from IPFS
         const response = await fetch(
           `/.netlify/functions/fetchEncryptedFile/${fileCid}`
@@ -41,9 +37,18 @@ const FileDetailPage = () => {
         const fileBuffer = Buffer.from(base64File, "base64");
 
         // Extract metadata from the file buffer
-        const metadataLength = fileBuffer.readUInt32BE(0); // First 4 bytes contain metadata length
-        const metadataBuffer = fileBuffer.slice(4, 4 + metadataLength);
-        const metadata = JSON.parse(metadataBuffer.toString());
+        const metadataLength = fileBuffer.readUInt32BE(0); // First 4 bytes for metadata length
+        if (metadataLength <= 0 || metadataLength > fileBuffer.length - 4) {
+          throw new Error("Invalid metadata length.");
+        }
+
+        const metadataBuffer = fileBuffer.subarray(4, 4 + metadataLength); // Use `subarray()` instead of `slice()`
+        let metadata;
+        try {
+          metadata = JSON.parse(metadataBuffer.toString());
+        } catch (jsonError) {
+          throw new Error("Failed to parse metadata. Possibly corrupted data.");
+        }
 
         if (!metadata.encryptionKey || !metadata.iv) {
           throw new Error("Missing encryption key or IV in file metadata");
@@ -52,7 +57,7 @@ const FileDetailPage = () => {
         setFileMetadata(metadata);
 
         // Extract the encrypted file part and decrypt if necessary
-        const encryptedFileBuffer = fileBuffer.slice(4 + metadataLength);
+        const encryptedFileBuffer = fileBuffer.subarray(4 + metadataLength); // Use `subarray()` instead of `slice()`
 
         if (metadata.isEncrypted) {
           const decryptedFile = decryptFile(
