@@ -1,25 +1,26 @@
 /** @type {any} */
-const axios = require('axios');
-const FormData = require('form-data');
+const axios = require("axios");
+const FormData = require("form-data");
 
 const uploadToPinata = async (event) => {
   try {
-    const { fileBuffer } = JSON.parse(event.body); // Parse the body to get fileBuffer
+    const { fileBuffer, pinataMetadata, pinataOptions } = JSON.parse(
+      event.body
+    );
     const buffer = Buffer.from(fileBuffer, "base64");
 
     const formData = new FormData();
-    formData.append("file", buffer, "drmFile");
+    formData.append("file", buffer, pinataMetadata.name || "uploadedFile"); // Use the fileName from metadata or default name
 
-    const metadata = JSON.stringify({
-      name: "DRM File",
-      keyvalues: {
-        encrypted: "true",
-      },
-    });
-    formData.append("pinataMetadata", metadata);
+    // Attach metadata to the request
+    if (pinataMetadata) {
+      formData.append("pinataMetadata", JSON.stringify(pinataMetadata));
+    }
 
-    const options = JSON.stringify({ cidVersion: 1 });
-    formData.append("pinataOptions", options);
+    // Attach options to the request
+    if (pinataOptions) {
+      formData.append("pinataOptions", JSON.stringify(pinataOptions));
+    }
 
     const response = await axios.post(
       "https://api.pinata.cloud/pinning/pinFileToIPFS",

@@ -39,6 +39,51 @@ const UploaderDashboard = ({
   const navigate = useNavigate();
   const ITEMS_PER_PAGE = 8;
 
+  // Function to fetch metadata for no-login user files
+  const fetchMetadataForNoLoginFile = async (cid) => {
+    try {
+      const response = await fetch(
+        `/.netlify/functions/fetchEncryptedFile/${cid}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch file data.");
+      }
+
+      // Get the file buffer from the response
+      const base64File = await response.text();
+      const fileBuffer = Buffer.from(base64File, "base64");
+
+      console.log("Fetched file buffer length:", fileBuffer.length);
+
+      // Extract metadata length
+      const metadataLength = fileBuffer.readUInt32BE(0);
+      console.log("Extracted metadata length:", metadataLength);
+
+      if (metadataLength < 0 || metadataLength > fileBuffer.length) {
+        throw new Error("Invalid metadata length.");
+      }
+
+      // Extract metadata buffer and parse it
+      const metadataBuffer = fileBuffer.slice(4, 4 + metadataLength);
+      console.log("Metadata buffer:", metadataBuffer.toString());
+      const metadata = JSON.parse(metadataBuffer.toString());
+
+      // If the metadata buffer is empty or incorrect, log detailed information
+      if (!metadataBuffer || metadataBuffer.length !== metadataLength) {
+        console.error(
+          `Metadata length mismatch. Expected: ${metadataLength}, Actual: ${metadataBuffer.length}`
+        );
+        throw new Error("Metadata buffer extraction failed.");
+      }
+
+      return metadata;
+    } catch (error) {
+      console.error(`Error fetching metadata for file with CID: ${cid}`, error);
+      return null;
+    }
+  };
+
   // Fetch uploaded files and display them
   const loadUploaderFiles = useCallback(async () => {
     try {
@@ -62,12 +107,19 @@ const UploaderDashboard = ({
 
         setFiles(filesWithMetadata);
       } else if (noLoginAccount) {
-        const storedFiles = localStorage.getItem(`files_${noLoginAccount.id}`);
-        if (storedFiles) {
-          setFiles(JSON.parse(storedFiles));
-        } else {
-          setFiles([]);
-        }
+        // Use the file CIDs from noLoginAccount.files
+        const fileCids = noLoginAccount.files || [];
+        const filesWithMetadata = await Promise.all(
+          fileCids.map(async (cid) => {
+            const metadata = await fetchMetadataForNoLoginFile(cid);
+            if (metadata) {
+              return { ...metadata, fileCid: cid };
+            }
+            return null;
+          })
+        );
+
+        setFiles(filesWithMetadata.filter(Boolean)); // Remove any null values
       }
 
       setStatus("");

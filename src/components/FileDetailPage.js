@@ -23,7 +23,7 @@ const FileDetailPage = () => {
       try {
         setLoading(true);
 
-        // Use the Netlify function to fetch encrypted file from IPFS
+        // Fetch encrypted file from IPFS
         const response = await fetch(
           `/.netlify/functions/fetchEncryptedFile/${fileCid}`
         );
@@ -37,48 +37,28 @@ const FileDetailPage = () => {
         const fileBuffer = Buffer.from(base64File, "base64");
 
         // Extract metadata from the file buffer
-        const metadataLength = fileBuffer.readUInt32BE(0); // First 4 bytes for metadata length
-        if (metadataLength <= 0 || metadataLength > fileBuffer.length - 4) {
+        if (fileBuffer.length < 4) {
+          throw new Error("Invalid file data.");
+        }
+
+        const metadataLength = fileBuffer.readUInt32BE(0);
+
+        if (metadataLength <= 0 || metadataLength > fileBuffer.length) {
           throw new Error("Invalid metadata length.");
         }
 
-        const metadataBuffer = fileBuffer.subarray(4, 4 + metadataLength); // Use `subarray()` instead of `slice()`
-        let metadata;
-        try {
-          metadata = JSON.parse(metadataBuffer.toString());
-        } catch (jsonError) {
-          throw new Error("Failed to parse metadata. Possibly corrupted data.");
-        }
-
-        if (!metadata.encryptionKey || !metadata.iv) {
-          throw new Error("Missing encryption key or IV in file metadata");
-        }
+        const metadataBuffer = fileBuffer.slice(4, 4 + metadataLength);
+        const metadata = JSON.parse(metadataBuffer.toString());
 
         setFileMetadata(metadata);
 
-        // Extract the encrypted file part and decrypt if necessary
-        const encryptedFileBuffer = fileBuffer.subarray(4 + metadataLength); // Use `subarray()` instead of `slice()`
+        // Extract the actual file data
+        const fileDataBuffer = fileBuffer.slice(4 + metadataLength);
 
-        if (metadata.isEncrypted) {
-          const decryptedFile = decryptFile(
-            encryptedFileBuffer,
-            metadata.encryptionKey,
-            metadata.iv
-          );
-
-          // Create a Blob URL for the decrypted file
-          const mimeType = getMimeType(metadata);
-          const blob = new Blob([decryptedFile], { type: mimeType });
-          const fileUrl = URL.createObjectURL(blob);
-          setDecryptedFileUrl(fileUrl);
-        } else {
-          // If the file is not encrypted, create a Blob URL directly
-          const blob = new Blob([encryptedFileBuffer], {
-            type: getMimeType(metadata),
-          });
-          const fileUrl = URL.createObjectURL(blob);
-          setDecryptedFileUrl(fileUrl);
-        }
+        // If no-login user, there's no encryption
+        const blob = new Blob([fileDataBuffer], { type: metadata.fileType });
+        const fileUrl = URL.createObjectURL(blob);
+        setDecryptedFileUrl(fileUrl);
       } catch (error) {
         console.error("Error loading file data:", error);
         setError("Error loading file. Please try again later.");
@@ -90,7 +70,7 @@ const FileDetailPage = () => {
     if (fileCid) {
       loadFileData();
     }
-  }, [fileCid, location.search]);
+  }, [fileCid]);
 
   // Function to get the correct MIME type
   const getMimeType = (metadata) => {

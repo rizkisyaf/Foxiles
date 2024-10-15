@@ -460,6 +460,23 @@ function HomePage({
       const fileBuffer = Buffer.from(fileArrayBuffer);
       const fileType = file.type;
 
+      // Prepare metadata and options for Pinata
+      const pinataMetadata = {
+        name: fileName,
+        keyvalues: {
+          description,
+          fileType,
+          fileSizeMB,
+          uploader: "no-login-user", // Example tag to indicate it's a no-login user
+        },
+      };
+
+      const pinataOptions = {
+        cidVersion: 1, // or 0 depending on your preference
+        wrapWithDirectory: true, // Wrap the file inside a directory to keep the original name
+      };
+
+      // Upload the file buffer to Pinata
       const uploadResponse = await fetch("/.netlify/functions/uploadToPinata", {
         method: "POST",
         headers: {
@@ -467,6 +484,8 @@ function HomePage({
         },
         body: JSON.stringify({
           fileBuffer: fileBuffer.toString("base64"),
+          pinataMetadata,
+          pinataOptions,
         }),
       });
 
@@ -476,6 +495,10 @@ function HomePage({
       if (!cid) {
         throw new Error("Failed to retrieve CID from Pinata");
       }
+
+      // Add CID to noLoginAccount.files
+      noLoginAccount.files = noLoginAccount.files || [];
+      noLoginAccount.files.push(cid);
 
       setFileCid(cid);
       setFileUrl(`https://ipfs.io/ipfs/${cid}`);
@@ -488,14 +511,6 @@ function HomePage({
         description,
       };
       setUploadedFiles((prevFiles) => [...prevFiles, newFileMetadata]);
-
-      const storedFiles =
-        JSON.parse(localStorage.getItem(`files_${noLoginAccount.id}`)) || [];
-      storedFiles.push(newFileMetadata);
-      localStorage.setItem(
-        `files_${noLoginAccount.id}`,
-        JSON.stringify(storedFiles)
-      );
 
       setStatus("File successfully uploaded without on-chain registration.");
       setStatusColor("green");

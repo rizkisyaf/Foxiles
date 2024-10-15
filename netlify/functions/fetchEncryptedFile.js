@@ -41,6 +41,13 @@ exports.handler = async (event) => {
     const contentType = response.headers["content-type"];
     console.log(`Content-Type received: ${contentType}`);
 
+    // Check if the response is an HTML error page
+    if (contentType.includes("text/html")) {
+      throw new Error(
+        "Received HTML content, which likely indicates an error retrieving the file from IPFS. Please check the CID or gateway URL."
+      );
+    }
+
     // Return the file buffer as a base64 encoded string
     return {
       statusCode: 200,
